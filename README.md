@@ -20,3 +20,11 @@
 2. Multi-color should be multiple SVGs on export, so it's easy to do multi color
    / multipen
 3. Draggable corners and edges... standard
+
+
+# Other UI Ideas
+  - Being able to drag / move the second loop object and it will extrapolate
+    that to all of them
+  - Color Spectrum to make it easier to tell how far in the looping you are
+  - Hotkeys (and a panel showing all of your source items / which is highlighted)
+  - Total plot size
