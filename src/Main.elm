@@ -70,7 +70,7 @@ main : Program () Model Msg
 main =
     Browser.document
         { init = \_ -> ( init, Cmd.none )
-        , view = \m -> { title = "PlotStar", body = [ view m ] }
+        , view = \m -> { title = "Plotter Otter", body = [ view m ] }
         , update = update
         , subscriptions = subscriptions
         }
