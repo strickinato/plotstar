@@ -22,6 +22,7 @@ port getSvg : String -> Cmd msg
 
 type alias Model =
     { objects : Dict Id Object
+    , selectedObjectId : Maybe Id
     , currentDraggable : Maybe Id
     }
 
@@ -34,8 +35,10 @@ type Msg
     = Drag DragMsg
     | GetSvg
     | GotSvg String
-    | SetRotation Id String
+    | SetRotation String
     | SetLoops Id String
+    | SelectObject (Maybe Id)
+    | AddShape
 
 
 type alias Object =
@@ -86,6 +89,7 @@ init =
     { objects =
         Dict.fromList
             [ ( 0, { x = 200, y = 200, loops = 100, rotation = 1 } ) ]
+    , selectedObjectId = Just 0
     , currentDraggable = Nothing
     }
 
@@ -179,13 +183,19 @@ update msg model =
         GotSvg output ->
             ( model, download "your-svg" output )
 
-        SetRotation id string ->
-            ( { model
-                | objects =
-                    updateRotation id
-                        (Maybe.withDefault 0 (String.toInt string))
-                        model.objects
-              }
+        SetRotation string ->
+            let
+                newObjects =
+                    case model.selectedObjectId of
+                        Just selectedId ->
+                            updateRotation selectedId
+                                (Maybe.withDefault 0 (String.toInt string))
+                                model.objects
+
+                        Nothing ->
+                            model.objects
+            in
+            ( { model | objects = newObjects }
             , Cmd.none
             )
 
@@ -199,10 +209,27 @@ update msg model =
             , Cmd.none
             )
 
+        SelectObject maybeObjectId ->
+            ( { model | selectedObjectId = maybeObjectId }
+            , Cmd.none
+            )
+
+        AddShape ->
+            ( { model | objects = insertShape model.objects }
+            , Cmd.none
+            )
+
 
 download : String -> String -> Cmd msg
 download fileName svg =
     Download.string (String.append fileName ".svg") "image/svg+xml" svg
+
+
+insertShape : Dict Int Object -> Dict Int Object
+insertShape dict =
+    Dict.insert (Dict.size dict)
+        { x = 200, y = 200, loops = 100, rotation = 1 }
+        dict
 
 
 updateRotation : Id -> Int -> Dict Int Object -> Dict Int Object
@@ -261,7 +288,7 @@ view model =
                 , Html.Attributes.style "height" "600px"
                 , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
                 ]
-                [ viewObjects model.objects ]
+                [ viewObjects model.selectedObjectId model.objects ]
             ]
         , Html.div
             [ Html.Attributes.style "display" "flex"
@@ -277,13 +304,26 @@ view model =
                 "360"
             , viewSlider "Rotation"
                 .rotation
-                (SetRotation 0)
+                SetRotation
                 (Dict.get 0 model.objects)
                 "-180"
                 "180"
+            , viewObjectSelector model
+            , Html.button [ Html.Events.onClick AddShape ] [ Html.text "Another Square" ]
             , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
             ]
         ]
+
+
+viewObjectSelector : Model -> Html Msg
+viewObjectSelector model =
+    Dict.toList model.objects
+        |> List.map
+            (\( id, obj ) ->
+                Html.li [ Html.Events.onClick (SelectObject (Just id)) ]
+                    [ Html.text <| "Square " ++ String.fromInt id ]
+            )
+        |> Html.ul []
 
 
 viewSlider : String -> (Object -> Int) -> (String -> Msg) -> Maybe Object -> String -> String -> Html Msg
@@ -307,37 +347,62 @@ viewSlider label acc msg obj min max =
             Html.span [] []
 
 
-viewObjects : Dict Id Object -> Svg Msg
-viewObjects objects =
+viewObjects : Maybe Id -> Dict Id Object -> Svg Msg
+viewObjects selectedObjectId objects =
     Dict.toList objects
-        |> List.map viewObject
+        |> List.map (viewObject selectedObjectId)
         |> Svg.g []
 
 
-viewObject : ( Int, Object ) -> Svg Msg
-viewObject ( id, object ) =
-    List.range 0 (object.loops - 1)
-        |> List.map
-            (\o ->
-                Svg.rect
-                    [ fill "none"
-                    , stroke "black"
-                    , transform <| rotation (o * object.rotation)
-                    , x (String.fromFloat object.x)
-                    , y (String.fromFloat object.y)
-                    , width (String.fromFloat 100)
-                    , height (String.fromFloat 100)
-                    , attribute "data-beacon" <| String.fromInt id
-                    ]
-                    []
-            )
+viewObject : Maybe Id -> ( Int, Object ) -> Svg Msg
+viewObject selectedObjectId ( id, object ) =
+    let
+        shadows =
+            List.range 1 (object.loops - 1)
+                |> List.map
+                    (\o ->
+                        Svg.rect
+                            [ fill "none"
+                            , stroke "black"
+                            , transform <| rotation (o * object.rotation)
+                            , x (String.fromFloat object.x)
+                            , y (String.fromFloat object.y)
+                            , width (String.fromFloat 100)
+                            , height (String.fromFloat 100)
+                            ]
+                            []
+                    )
+    in
+    (renderMain selectedObjectId ( id, object ) :: shadows)
         |> Svg.g []
+
+
+renderMain : Maybe Id -> ( Int, Object ) -> Svg Msg
+renderMain maybeSelectedId ( id, object ) =
+    let
+        color =
+            if maybeSelectedId == Just id then
+                "red"
+
+            else
+                "blue"
+    in
+    Svg.rect
+        [ fill "none"
+        , stroke color
+        , x (String.fromFloat object.x)
+        , y (String.fromFloat object.y)
+        , width (String.fromFloat 100)
+        , height (String.fromFloat 100)
+        , attribute "data-beacon" <| String.fromInt id
+        ]
+        []
 
 
 rotation : Int -> String
 rotation int =
     String.concat
-        [ "translate(50, 50) rotate("
+        [ "rotate("
         , String.fromInt int
         , ", 500, 500)"
         ]
