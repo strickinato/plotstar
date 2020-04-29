@@ -2,6 +2,7 @@ port module Main exposing (main)
 
 import Browser
 import Dict exposing (Dict)
+import File.Download as Download
 import Html exposing (Html)
 import Html.Attributes exposing (attribute, style)
 import Html.Events
@@ -11,6 +12,12 @@ import Svg.Attributes exposing (cx, cy, fill, height, points, r, stroke, transfo
 
 
 port dragEvents : (Json.Decode.Value -> msg) -> Sub msg
+
+
+port gotSvg : (String -> msg) -> Sub msg
+
+
+port getSvg : String -> Cmd msg
 
 
 type alias Model =
@@ -25,6 +32,8 @@ type alias Id =
 
 type Msg
     = Drag DragMsg
+    | GetSvg
+    | GotSvg String
     | SetRotation Id String
     | SetLoops Id String
 
@@ -59,15 +68,17 @@ main =
     Browser.document
         { init = \_ -> ( init, Cmd.none )
         , view = \m -> { title = "PlotStar", body = [ view m ] }
-        , update = \msg model -> ( update msg model, Cmd.none )
+        , update = update
         , subscriptions = subscriptions
         }
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    dragEvents decodeDragEvents
-        |> Sub.map Drag
+    Sub.batch
+        [ Sub.map Drag <| dragEvents decodeDragEvents
+        , gotSvg GotSvg
+        ]
 
 
 init : Model
@@ -126,49 +137,72 @@ getBoundingBox rect =
     }
 
 
+svgId =
+    "plotter-otter-svg"
+
+
 
 -- Update logic
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Drag { event, cursor, draggables } ->
-            case event of
-                Start ->
-                    { model
-                        | currentDraggable =
-                            draggables
-                                |> List.filter
-                                    (\( _, draggable ) ->
-                                        distance cursor draggable < 20
-                                    )
-                                |> closestRect cursor
-                    }
+            let
+                newModel =
+                    case event of
+                        Start ->
+                            { model
+                                | currentDraggable =
+                                    draggables
+                                        |> List.filter
+                                            (\( _, draggable ) ->
+                                                distance cursor draggable < 20
+                                            )
+                                        |> closestRect cursor
+                            }
 
-                Move ->
-                    model.currentDraggable
-                        |> Maybe.map (moveDraggable model cursor)
-                        |> Maybe.withDefault model
+                        Move ->
+                            model.currentDraggable
+                                |> Maybe.map (moveDraggable model cursor)
+                                |> Maybe.withDefault model
 
-                Stop ->
-                    { model | currentDraggable = Nothing }
+                        Stop ->
+                            { model | currentDraggable = Nothing }
+            in
+            ( newModel, Cmd.none )
+
+        GetSvg ->
+            ( model, getSvg svgId )
+
+        GotSvg output ->
+            ( model, download "your-svg" output )
 
         SetRotation id string ->
-            { model
+            ( { model
                 | objects =
                     updateRotation id
                         (Maybe.withDefault 0 (String.toInt string))
                         model.objects
-            }
+              }
+            , Cmd.none
+            )
 
         SetLoops id string ->
-            { model
+            ( { model
                 | objects =
                     updateLoops id
                         (Maybe.withDefault 0 (String.toInt string))
                         model.objects
-            }
+              }
+            , Cmd.none
+            )
+
+
+download : String -> String -> Cmd msg
+download fileName svg =
+    Download.string (String.append fileName ".svg") "image/svg+xml" svg
 
 
 updateRotation : Id -> Int -> Dict Int Object -> Dict Int Object
@@ -220,10 +254,12 @@ view model =
         ]
         [ Html.div
             [ Html.Attributes.style "border" "2px solid black"
+            , Html.Attributes.id svgId
             ]
             [ Svg.svg
                 [ Html.Attributes.style "width" "600px"
                 , Html.Attributes.style "height" "600px"
+                , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
                 ]
                 [ viewObjects model.objects ]
             ]
@@ -245,6 +281,7 @@ view model =
                 (Dict.get 0 model.objects)
                 "-180"
                 "180"
+            , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
             ]
         ]
 

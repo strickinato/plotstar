@@ -22,7 +22,13 @@
                 flags: {},
             });
 
+            app.ports.getSvg.subscribe(function(id) {
+                var node = document.getElementById(id);
+                app.ports.gotSvg.send(node.innerHTML);
+            });
+
             setupDraggable(app.ports.dragEvents.send);
+
         </script>
     </body>
 </html>
