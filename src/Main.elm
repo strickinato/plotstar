@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes exposing (attribute, style)
 import Html.Events
 import Json.Decode
+import Maybe.Extra as Maybe
 import Svg exposing (Svg)
 import Svg.Attributes exposing (cx, cy, fill, height, points, r, stroke, transform, viewBox, width, x, y)
 
@@ -36,7 +37,7 @@ type Msg
     | GetSvg
     | GotSvg String
     | SetRotation String
-    | SetLoops Id String
+    | SetLoops String
     | SelectObject (Maybe Id)
     | AddShape
 
@@ -199,13 +200,19 @@ update msg model =
             , Cmd.none
             )
 
-        SetLoops id string ->
-            ( { model
-                | objects =
-                    updateLoops id
-                        (Maybe.withDefault 0 (String.toInt string))
-                        model.objects
-              }
+        SetLoops string ->
+            let
+                newObjects =
+                    case model.selectedObjectId of
+                        Just selectedId ->
+                            updateLoops selectedId
+                                (Maybe.withDefault 0 (String.toInt string))
+                                model.objects
+
+                        Nothing ->
+                            model.objects
+            in
+            ( { model | objects = newObjects }
             , Cmd.none
             )
 
@@ -296,16 +303,16 @@ view model =
             , Html.Attributes.style "padding-left" "24px"
             ]
             [ Html.h3 [] [ Html.text "Controls" ]
-            , viewSlider "Loops"
+            , viewSlider model
+                "Loops"
                 .loops
-                (SetLoops 0)
-                (Dict.get 0 model.objects)
+                SetLoops
                 "1"
                 "360"
-            , viewSlider "Rotation"
+            , viewSlider model
+                "Rotation"
                 .rotation
                 SetRotation
-                (Dict.get 0 model.objects)
                 "-180"
                 "180"
             , viewObjectSelector model
@@ -320,15 +327,35 @@ viewObjectSelector model =
     Dict.toList model.objects
         |> List.map
             (\( id, obj ) ->
-                Html.li [ Html.Events.onClick (SelectObject (Just id)) ]
+                Html.li
+                    [ Html.Events.onClick (SelectObject (Just id))
+                    , if isSelected model id then
+                        Html.Attributes.style "color" "red"
+
+                      else
+                        Html.Attributes.style "color" "black"
+                    ]
                     [ Html.text <| "Square " ++ String.fromInt id ]
             )
         |> Html.ul []
 
 
-viewSlider : String -> (Object -> Int) -> (String -> Msg) -> Maybe Object -> String -> String -> Html Msg
-viewSlider label acc msg obj min max =
-    case obj of
+isSelected : Model -> Id -> Bool
+isSelected model id =
+    Debug.log "Just Id" (Just id)
+        == model.selectedObjectId
+        |> Debug.log "EQ"
+
+
+getSelectedObject : Model -> Maybe Object
+getSelectedObject model =
+    Maybe.map (\id -> Dict.get id model.objects) model.selectedObjectId
+        |> Maybe.join
+
+
+viewSlider : Model -> String -> (Object -> Int) -> (String -> Msg) -> String -> String -> Html Msg
+viewSlider model label acc msg min max =
+    case getSelectedObject model of
         Just o ->
             Html.label []
                 [ Html.p []
