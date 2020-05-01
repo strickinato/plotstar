@@ -38,6 +38,11 @@ type Msg
     | GotSvg String
     | SetRotation String
     | SetLoops String
+    | SetX String
+    | SetY String
+    | SetScale String
+    | SetXShift String
+    | SetYShift String
     | SelectObject (Maybe Id)
     | AddShape
 
@@ -45,8 +50,13 @@ type Msg
 type alias Object =
     { x : Float
     , y : Float
+    , width : Int
+    , height : Int
     , loops : Int
+    , scale : Float
     , rotation : Int
+    , xShift : Int
+    , yShift : Int
     }
 
 
@@ -89,9 +99,22 @@ init : Model
 init =
     { objects =
         Dict.fromList
-            [ ( 0, { x = 200, y = 200, loops = 100, rotation = 1 } ) ]
+            [ ( 0, initShape ) ]
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
+    }
+
+
+initShape =
+    { x = canvasWidth / 2
+    , y = canvasHeight / 2
+    , loops = 72
+    , rotation = 25
+    , width = 10
+    , height = 10
+    , scale = 2
+    , xShift = 0
+    , yShift = 0
     }
 
 
@@ -184,35 +207,80 @@ update msg model =
         GotSvg output ->
             ( model, download "your-svg" output )
 
-        SetRotation string ->
-            let
-                newObjects =
-                    case model.selectedObjectId of
-                        Just selectedId ->
-                            updateRotation selectedId
-                                (Maybe.withDefault 0 (String.toInt string))
-                                model.objects
-
-                        Nothing ->
-                            model.objects
-            in
-            ( { model | objects = newObjects }
+        SetRotation str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | rotation = Maybe.withDefault 0 <| String.toInt str })
+                        model.objects
+              }
             , Cmd.none
             )
 
-        SetLoops string ->
-            let
-                newObjects =
-                    case model.selectedObjectId of
-                        Just selectedId ->
-                            updateLoops selectedId
-                                (Maybe.withDefault 0 (String.toInt string))
-                                model.objects
+        SetLoops str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | loops = Maybe.withDefault 0 <| String.toInt str })
+                        model.objects
+              }
+            , Cmd.none
+            )
 
-                        Nothing ->
-                            model.objects
-            in
-            ( { model | objects = newObjects }
+        SetX str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | x = Maybe.withDefault 0 <| String.toFloat str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
+        SetY str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | y = Maybe.withDefault 0 <| String.toFloat str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
+        SetScale str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | scale = Maybe.withDefault 0 <| String.toFloat str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
+        SetXShift str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | xShift = Maybe.withDefault 0 <| String.toInt str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
+        SetYShift str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | yShift = Maybe.withDefault 0 <| String.toInt str })
+                        model.objects
+              }
             , Cmd.none
             )
 
@@ -234,9 +302,19 @@ download fileName svg =
 
 insertShape : Dict Int Object -> Dict Int Object
 insertShape dict =
-    Dict.insert (Dict.size dict)
-        { x = 200, y = 200, loops = 100, rotation = 1 }
-        dict
+    Dict.insert (Dict.size dict) initShape dict
+
+
+updateObject : Maybe Id -> (Object -> Object) -> Dict Int Object -> Dict Int Object
+updateObject maybeId updater objects =
+    case maybeId of
+        Just selectedId ->
+            Dict.update selectedId
+                (Maybe.map updater)
+                objects
+
+        Nothing ->
+            objects
 
 
 updateRotation : Id -> Int -> Dict Int Object -> Dict Int Object
@@ -253,6 +331,33 @@ updateLoops id newLoops dict =
     Dict.update id
         (Maybe.map
             (\a -> { a | loops = newLoops })
+        )
+        dict
+
+
+updateX : Id -> Float -> Dict Int Object -> Dict Int Object
+updateX id newLoops dict =
+    Dict.update id
+        (Maybe.map
+            (\a -> { a | x = newLoops })
+        )
+        dict
+
+
+updateY : Id -> Float -> Dict Int Object -> Dict Int Object
+updateY id newLoops dict =
+    Dict.update id
+        (Maybe.map
+            (\a -> { a | y = newLoops })
+        )
+        dict
+
+
+updateScale : Id -> Float -> Dict Int Object -> Dict Int Object
+updateScale id newLoops dict =
+    Dict.update id
+        (Maybe.map
+            (\a -> { a | scale = newLoops })
         )
         dict
 
@@ -285,14 +390,15 @@ view model =
     Html.div
         [ Html.Attributes.id "main"
         , Html.Attributes.style "display" "flex"
+        , Html.Attributes.style "padding" "24px"
         ]
         [ Html.div
             [ Html.Attributes.style "border" "2px solid black"
             , Html.Attributes.id svgId
             ]
             [ Svg.svg
-                [ Html.Attributes.style "width" "600px"
-                , Html.Attributes.style "height" "600px"
+                [ Html.Attributes.style "width" (String.fromInt canvasWidth ++ "px")
+                , Html.Attributes.style "height" (String.fromInt canvasHeight ++ "px")
                 , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
                 ]
                 [ viewObjects model.selectedObjectId model.objects ]
@@ -305,21 +411,59 @@ view model =
             [ Html.h3 [] [ Html.text "Controls" ]
             , viewSlider model
                 "Loops"
-                .loops
+                (String.fromInt << .loops)
                 SetLoops
                 "1"
                 "360"
             , viewSlider model
                 "Rotation"
-                .rotation
+                (String.fromInt << .rotation)
                 SetRotation
                 "-180"
                 "180"
+            , viewSlider model
+                "X"
+                (String.fromFloat << .x)
+                SetX
+                "0"
+                (String.fromInt canvasWidth)
+            , viewSlider model
+                "Y"
+                (String.fromFloat << .y)
+                SetY
+                "0"
+                (String.fromInt canvasHeight)
+            , viewSlider model
+                "Scale"
+                (String.fromFloat << .scale)
+                SetScale
+                "-20"
+                "20"
+            , viewSlider model
+                "X-Shift"
+                (String.fromInt << .xShift)
+                SetXShift
+                "-10"
+                "10"
+            , viewSlider model
+                "Y-Shift"
+                (String.fromInt << .yShift)
+                SetYShift
+                "-10"
+                "10"
             , viewObjectSelector model
             , Html.button [ Html.Events.onClick AddShape ] [ Html.text "Another Square" ]
             , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
             ]
         ]
+
+
+canvasWidth =
+    1200
+
+
+canvasHeight =
+    900
 
 
 viewObjectSelector : Model -> Html Msg
@@ -353,16 +497,16 @@ getSelectedObject model =
         |> Maybe.join
 
 
-viewSlider : Model -> String -> (Object -> Int) -> (String -> Msg) -> String -> String -> Html Msg
-viewSlider model label acc msg min max =
+viewSlider : Model -> String -> (Object -> String) -> (String -> Msg) -> String -> String -> Html Msg
+viewSlider model label accessor msg min max =
     case getSelectedObject model of
         Just o ->
             Html.label []
                 [ Html.p []
-                    [ Html.text label ]
+                    [ Html.text <| label ++ ": " ++ accessor o ]
                 , Html.input
                     [ Html.Attributes.type_ "range"
-                    , Html.Attributes.value <| (String.fromInt << acc) o
+                    , Html.Attributes.value <| accessor o
                     , Html.Events.onInput msg
                     , Html.Attributes.min min
                     , Html.Attributes.max max
@@ -391,11 +535,11 @@ viewObject selectedObjectId ( id, object ) =
                         Svg.rect
                             [ fill "none"
                             , stroke "black"
-                            , transform <| rotation (o * object.rotation)
-                            , x (String.fromFloat object.x)
-                            , y (String.fromFloat object.y)
-                            , width (String.fromFloat 100)
-                            , height (String.fromFloat 100)
+                            , transform <| rotation o object
+                            , x (String.fromFloat <| object.x + toFloat object.xShift)
+                            , y (String.fromFloat <| object.y + toFloat object.yShift)
+                            , width (String.fromFloat <| 100 + toFloat o * object.scale)
+                            , height (String.fromFloat <| 100 + toFloat o * object.scale)
                             ]
                             []
                     )
@@ -426,12 +570,23 @@ renderMain maybeSelectedId ( id, object ) =
         []
 
 
-rotation : Int -> String
-rotation int =
+
+{-
+   - rotate(x, x, y)
+
+-}
+
+
+rotation : Int -> Object -> String
+rotation loop obj =
     String.concat
         [ "rotate("
-        , String.fromInt int
-        , ", 500, 500)"
+        , String.fromInt <| loop * obj.rotation
+        , ", "
+        , String.fromFloat <| obj.x + (toFloat obj.width / 2)
+        , ", "
+        , String.fromFloat <| obj.y + (toFloat obj.width / 2)
+        , ")"
         ]
 
 
