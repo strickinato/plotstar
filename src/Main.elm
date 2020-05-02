@@ -44,6 +44,7 @@ type Msg
     | SetXShift String
     | SetYShift String
     | Center
+    | Delete
     | SelectObject (Maybe Id)
     | AddShape
 
@@ -296,13 +297,34 @@ update msg model =
             , Cmd.none
             )
 
+        Delete ->
+            let
+                newObjects =
+                    case model.selectedObjectId of
+                        Just id ->
+                            Dict.remove id model.objects
+
+                        Nothing ->
+                            model.objects
+            in
+            ( { model
+                | selectedObjectId = Nothing
+                , objects = newObjects
+              }
+            , Cmd.none
+            )
+
         SelectObject maybeObjectId ->
             ( { model | selectedObjectId = maybeObjectId }
             , Cmd.none
             )
 
         AddShape ->
-            ( { model | objects = insertShape model.objects }
+            let
+                ( newSelectedId, newObjects ) =
+                    insertShape model.objects
+            in
+            ( { model | objects = newObjects, selectedObjectId = Just newSelectedId }
             , Cmd.none
             )
 
@@ -312,9 +334,21 @@ download fileName svg =
     Download.string (String.append fileName ".svg") "image/svg+xml" svg
 
 
-insertShape : Dict Int Object -> Dict Int Object
+insertShape : Dict Int Object -> ( Int, Dict Int Object )
 insertShape dict =
-    Dict.insert (Dict.size dict) initShape dict
+    let
+        newKey =
+            nextKey dict
+    in
+    ( newKey, Dict.insert newKey initShape dict )
+
+
+nextKey : Dict Int Object -> Int
+nextKey dict =
+    Dict.keys dict
+        |> List.maximum
+        |> Maybe.map ((+) 1)
+        |> Maybe.withDefault 0
 
 
 updateObject : Maybe Id -> (Object -> Object) -> Dict Int Object -> Dict Int Object
@@ -421,6 +455,12 @@ view model =
             , viewObjectSelector model
             , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
             , Html.button [ Html.Events.onClick AddShape ] [ Html.text "Another Square" ]
+            , case model.selectedObjectId of
+                Just _ ->
+                    Html.button [ Html.Events.onClick Delete ] [ Html.text "delete selected" ]
+
+                Nothing ->
+                    Html.text ""
             , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
             ]
         ]
