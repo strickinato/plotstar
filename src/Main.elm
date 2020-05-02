@@ -112,8 +112,8 @@ initShape =
     , y = canvasHeight / 2
     , loops = 72
     , rotation = 25
-    , width = 10
-    , height = 10
+    , width = 50
+    , height = 50
     , scale = 2
     , xShift = 0
     , yShift = 0
@@ -402,7 +402,15 @@ view model =
                 , Html.Attributes.style "height" (String.fromInt canvasHeight ++ "px")
                 , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
                 ]
-                [ viewObjects model.selectedObjectId model.objects ]
+                [ Svg.circle
+                    [ fill "black"
+                    , r (String.fromFloat <| 5)
+                    , cx (String.fromFloat <| canvasWidth / 2)
+                    , cy (String.fromFloat <| canvasHeight / 2)
+                    ]
+                    []
+                , viewObjects model.selectedObjectId model.objects
+                ]
             ]
         , Html.div
             [ Html.Attributes.style "display" "flex"
@@ -539,21 +547,54 @@ viewObject selectedObjectId ( id, object ) =
         shadows =
             List.range 1 (object.loops - 1)
                 |> List.map
-                    (\o ->
+                    (\loop ->
                         Svg.rect
                             [ fill "none"
                             , stroke "black"
-                            , transform <| rotation o object
-                            , x (String.fromFloat <| object.x + toFloat object.xShift)
-                            , y (String.fromFloat <| object.y + toFloat object.yShift)
-                            , width (String.fromFloat <| 100 + toFloat o * object.scale)
-                            , height (String.fromFloat <| 100 + toFloat o * object.scale)
+                            , transform <| calculatedRotation loop object
+                            , x (String.fromFloat <| calculatedX loop object)
+                            , y (String.fromFloat <| calculatedY loop object)
+                            , width (String.fromFloat <| calculatedWidth loop object)
+                            , height (String.fromFloat <| calculatedHeight loop object)
                             ]
                             []
                     )
     in
     (renderMain selectedObjectId ( id, object ) :: shadows)
         |> Svg.g []
+
+
+calculatedX : Int -> Object -> Float
+calculatedX loop object =
+    object.x - (calculatedWidth loop object / 2)
+
+
+calculatedY : Int -> Object -> Float
+calculatedY loop object =
+    object.y - (calculatedHeight loop object / 2)
+
+
+calculatedWidth : Int -> Object -> Float
+calculatedWidth loop object =
+    toFloat object.width + (toFloat loop * object.scale)
+
+
+calculatedHeight : Int -> Object -> Float
+calculatedHeight loop object =
+    toFloat object.height + (toFloat loop * object.scale)
+
+
+calculatedRotation : Int -> Object -> String
+calculatedRotation loop object =
+    String.concat
+        [ "rotate("
+        , String.fromInt <| loop * object.rotation
+        , ","
+        , String.fromFloat object.x
+        , ","
+        , String.fromFloat object.y
+        , ")"
+        ]
 
 
 renderMain : Maybe Id -> ( Int, Object ) -> Svg Msg
@@ -569,33 +610,13 @@ renderMain maybeSelectedId ( id, object ) =
     Svg.rect
         [ fill "none"
         , stroke color
-        , x (String.fromFloat object.x)
-        , y (String.fromFloat object.y)
-        , width (String.fromFloat 100)
-        , height (String.fromFloat 100)
+        , x (String.fromFloat <| object.x - (toFloat object.width / 2))
+        , y (String.fromFloat <| (object.y - toFloat object.height / 2))
+        , width (String.fromInt object.width)
+        , height (String.fromInt object.height)
         , attribute "data-beacon" <| String.fromInt id
         ]
         []
-
-
-
-{-
-   - rotate(x, x, y)
-
--}
-
-
-rotation : Int -> Object -> String
-rotation loop obj =
-    String.concat
-        [ "rotate("
-        , String.fromInt <| loop * obj.rotation
-        , ", "
-        , String.fromFloat <| obj.x + (toFloat obj.width / 2)
-        , ", "
-        , String.fromFloat <| obj.y + (toFloat obj.width / 2)
-        , ")"
-        ]
 
 
 toggle : (Bool -> Msg) -> Bool -> String -> Html Msg
