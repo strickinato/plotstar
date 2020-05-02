@@ -40,6 +40,8 @@ type Msg
     | SetLoops String
     | SetX String
     | SetY String
+    | SetWidth String
+    | SetHeight String
     | SetScale String
     | SetXShift String
     | SetYShift String
@@ -253,6 +255,28 @@ update msg model =
             , Cmd.none
             )
 
+        SetWidth str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | width = Maybe.withDefault 0 <| String.toInt str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
+        SetHeight str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | height = Maybe.withDefault 0 <| String.toInt str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
         SetScale str ->
             ( { model
                 | objects =
@@ -443,6 +467,18 @@ view model =
                 "0"
                 (String.fromInt canvasHeight)
             , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
+            , viewSlider model
+                "Width"
+                (String.fromInt << .width)
+                SetWidth
+                "0"
+                "400"
+            , viewSlider model
+                "Height"
+                (String.fromInt << .height)
+                SetHeight
+                "0"
+                "400"
             , viewSlider model
                 "Scale"
                 (String.fromFloat << .scale)
