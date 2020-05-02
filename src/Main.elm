@@ -43,6 +43,7 @@ type Msg
     | SetScale String
     | SetXShift String
     | SetYShift String
+    | Center
     | SelectObject (Maybe Id)
     | AddShape
 
@@ -284,6 +285,17 @@ update msg model =
             , Cmd.none
             )
 
+        Center ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | x = canvasWidth / 2, y = canvasHeight / 2 })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
         SelectObject maybeObjectId ->
             ( { model | selectedObjectId = maybeObjectId }
             , Cmd.none
@@ -315,51 +327,6 @@ updateObject maybeId updater objects =
 
         Nothing ->
             objects
-
-
-updateRotation : Id -> Int -> Dict Int Object -> Dict Int Object
-updateRotation id newRotation dict =
-    Dict.update id
-        (Maybe.map
-            (\a -> { a | rotation = newRotation })
-        )
-        dict
-
-
-updateLoops : Id -> Int -> Dict Int Object -> Dict Int Object
-updateLoops id newLoops dict =
-    Dict.update id
-        (Maybe.map
-            (\a -> { a | loops = newLoops })
-        )
-        dict
-
-
-updateX : Id -> Float -> Dict Int Object -> Dict Int Object
-updateX id newLoops dict =
-    Dict.update id
-        (Maybe.map
-            (\a -> { a | x = newLoops })
-        )
-        dict
-
-
-updateY : Id -> Float -> Dict Int Object -> Dict Int Object
-updateY id newLoops dict =
-    Dict.update id
-        (Maybe.map
-            (\a -> { a | y = newLoops })
-        )
-        dict
-
-
-updateScale : Id -> Float -> Dict Int Object -> Dict Int Object
-updateScale id newLoops dict =
-    Dict.update id
-        (Maybe.map
-            (\a -> { a | scale = newLoops })
-        )
-        dict
 
 
 moveDraggable : Model -> Coords -> Id -> Model
@@ -452,6 +419,7 @@ view model =
                 "-10"
                 "10"
             , viewObjectSelector model
+            , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
             , Html.button [ Html.Events.onClick AddShape ] [ Html.text "Another Square" ]
             , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
             ]
