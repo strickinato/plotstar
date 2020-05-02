@@ -571,7 +571,11 @@ viewSlider : Model -> String -> (Object -> String) -> (String -> Msg) -> String 
 viewSlider model label accessor msg min max =
     case getSelectedObject model of
         Just o ->
-            Html.label []
+            Html.label
+                [ Html.Attributes.style "border" "1px solid black"
+                , Html.Attributes.style "padding" "8px"
+                , Html.Attributes.style "margin-bottom" "8px"
+                ]
                 [ Html.span
                     []
                     [ Html.text <| label ++ ": " ]
