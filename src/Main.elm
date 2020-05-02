@@ -442,6 +442,7 @@ view model =
                 SetY
                 "0"
                 (String.fromInt canvasHeight)
+            , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
             , viewSlider model
                 "Scale"
                 (String.fromFloat << .scale)
@@ -452,16 +453,15 @@ view model =
                 "X-Shift"
                 (String.fromInt << .xShift)
                 SetXShift
-                "-10"
-                "10"
+                "-600"
+                "600"
             , viewSlider model
                 "Y-Shift"
                 (String.fromInt << .yShift)
                 SetYShift
-                "-10"
-                "10"
+                "-600"
+                "600"
             , viewObjectSelector model
-            , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
             , Html.button [ Html.Events.onClick AddShape ] [ Html.text "Another Square" ]
             , case model.selectedObjectId of
                 Just _ ->
@@ -590,9 +590,9 @@ calculatedRotation loop object =
         [ "rotate("
         , String.fromInt <| loop * object.rotation
         , ","
-        , String.fromFloat object.x
+        , String.fromFloat (object.x + toFloat object.xShift)
         , ","
-        , String.fromFloat object.y
+        , String.fromFloat (object.y + toFloat object.yShift)
         , ")"
         ]
 
