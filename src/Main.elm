@@ -25,6 +25,7 @@ type alias Model =
     { objects : Dict Id Object
     , selectedObjectId : Maybe Id
     , currentDraggable : Maybe Id
+    , guidesVisible : Bool
     }
 
 
@@ -49,6 +50,7 @@ type Msg
     | Delete
     | SelectObject (Maybe Id)
     | AddShape
+    | SetGuidesVisible Bool
 
 
 type alias Object =
@@ -106,6 +108,7 @@ init =
             [ ( 0, initShape ) ]
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
+    , guidesVisible = True
     }
 
 
@@ -352,6 +355,11 @@ update msg model =
             , Cmd.none
             )
 
+        SetGuidesVisible bool ->
+            ( { model | guidesVisible = bool }
+            , Cmd.none
+            )
+
 
 download : String -> String -> Cmd msg
 download fileName svg =
@@ -426,14 +434,8 @@ view model =
                 , Html.Attributes.style "height" (String.fromInt canvasHeight ++ "px")
                 , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
                 ]
-                [ Svg.circle
-                    [ fill "black"
-                    , r (String.fromFloat <| 5)
-                    , cx (String.fromFloat <| canvasWidth / 2)
-                    , cy (String.fromFloat <| canvasHeight / 2)
-                    ]
-                    []
-                , viewObjects model.selectedObjectId model.objects
+                [ viewCenterPoint model.guidesVisible
+                , viewObjects model
                 ]
             ]
         , Html.div
@@ -499,6 +501,7 @@ view model =
                 "600"
             , viewObjectSelector model
             , Html.button [ Html.Events.onClick AddShape ] [ Html.text "Another Square" ]
+            , toggle SetGuidesVisible model.guidesVisible "Show Guides"
             , case model.selectedObjectId of
                 Just _ ->
                     Html.button [ Html.Events.onClick Delete ] [ Html.text "delete selected" ]
@@ -516,6 +519,21 @@ canvasWidth =
 
 canvasHeight =
     900
+
+
+viewCenterPoint : Bool -> Svg Msg
+viewCenterPoint bool =
+    if bool then
+        Svg.circle
+            [ fill "red"
+            , r (String.fromFloat <| 3)
+            , cx (String.fromFloat <| canvasWidth / 2)
+            , cy (String.fromFloat <| canvasHeight / 2)
+            ]
+            []
+
+    else
+        Svg.g [] []
 
 
 viewObjectSelector : Model -> Html Msg
@@ -570,15 +588,15 @@ viewSlider model label accessor msg min max =
             Html.span [] []
 
 
-viewObjects : Maybe Id -> Dict Id Object -> Svg Msg
-viewObjects selectedObjectId objects =
-    Dict.toList objects
-        |> List.map (viewObject selectedObjectId)
+viewObjects : Model -> Svg Msg
+viewObjects model =
+    Dict.toList model.objects
+        |> List.map (viewObject model)
         |> Svg.g []
 
 
-viewObject : Maybe Id -> ( Int, Object ) -> Svg Msg
-viewObject selectedObjectId ( id, object ) =
+viewObject : Model -> ( Int, Object ) -> Svg Msg
+viewObject model ( id, object ) =
     let
         shadows =
             List.range 1 (object.loops - 1)
@@ -596,7 +614,7 @@ viewObject selectedObjectId ( id, object ) =
                             []
                     )
     in
-    (renderMain selectedObjectId ( id, object ) :: shadows)
+    (renderMain model ( id, object ) :: shadows)
         |> Svg.g []
 
 
@@ -633,15 +651,15 @@ calculatedRotation loop object =
         ]
 
 
-renderMain : Maybe Id -> ( Int, Object ) -> Svg Msg
-renderMain maybeSelectedId ( id, object ) =
+renderMain : Model -> ( Int, Object ) -> Svg Msg
+renderMain { guidesVisible, selectedObjectId } ( id, object ) =
     let
         color =
-            if maybeSelectedId == Just id then
+            if selectedObjectId == Just id && guidesVisible then
                 "red"
 
             else
-                "blue"
+                "black"
     in
     Svg.rect
         [ fill "none"
