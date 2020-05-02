@@ -572,8 +572,14 @@ viewSlider model label accessor msg min max =
     case getSelectedObject model of
         Just o ->
             Html.label []
-                [ Html.p []
-                    [ Html.text <| label ++ ": " ++ accessor o ]
+                [ Html.span
+                    []
+                    [ Html.text <| label ++ ": " ]
+                , Html.input
+                    [ Html.Attributes.value <| accessor o
+                    , Html.Events.onInput msg
+                    ]
+                    []
                 , Html.input
                     [ Html.Attributes.type_ "range"
                     , Html.Attributes.value <| accessor o
