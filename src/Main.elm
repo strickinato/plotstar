@@ -515,6 +515,7 @@ view model =
                 , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
                 ]
                 [ viewCenterPoint model.guidesVisible
+                , viewAnchorPoint model
                 , viewObjects model
                 ]
             ]
@@ -780,6 +781,22 @@ viewCenterPoint bool =
 
     else
         Svg.g [] []
+
+
+viewAnchorPoint : Model -> Svg Msg
+viewAnchorPoint model =
+    case ( model.guidesVisible, getSelectedObject model ) of
+        ( True, Just obj ) ->
+            Svg.circle
+                [ fill "red"
+                , r (String.fromInt <| 2)
+                , cx (String.fromInt obj.anchorX)
+                , cy (String.fromInt obj.anchorY)
+                ]
+                []
+
+        _ ->
+            Svg.g [] []
 
 
 viewObjectSelector : Model -> Html Msg
