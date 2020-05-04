@@ -37,7 +37,6 @@ type Msg
     = Drag DragMsg
     | GetSvg
     | GotSvg String
-    | SetRotation String
     | SetLoops String
     | SetX String
     | SetY String
@@ -45,15 +44,17 @@ type Msg
     | SetAnchorY String
       -- | SetWidth String
       -- | SetHeight String
-    | SetXShift String
-    | SetYShift String
-    | SetScale String
+    | SetXShift Transformation
+    | SetYShift Transformation
+    | SetScale Transformation
+    | SetRotation Transformation
     | Center
     | Delete
     | SelectObject (Maybe Id)
     | AddSquare
     | AddCircle -- Todo generalize
     | SetGuidesVisible Bool
+    | NoOp
 
 
 type alias Object =
@@ -62,12 +63,21 @@ type alias Object =
     , anchorX : Int
     , anchorY : Int
     , loops : Int
-    , xShift : Float
-    , yShift : Float
-    , scale : Float
-    , rotation : Int
+    , xShift : Transformation
+    , yShift : Transformation
+    , scale : Transformation
+    , rotation : Transformation
     , shape : Shape
     }
+
+
+type Transformation
+    = Linear Float
+    | Cyclical CycleData
+
+
+type alias CycleData =
+    { amplitude : Float, frequency : Float }
 
 
 type Shape
@@ -138,12 +148,12 @@ initShape shape =
     , y = canvasHeight / 2
     , anchorX = canvasWidth // 2
     , anchorY = canvasHeight // 2
-    , xShift = 0
-    , yShift = 0
-    , loops = 72
-    , rotation = 25
+    , xShift = Linear 0
+    , yShift = Linear 0
+    , loops = 1
+    , rotation = Linear 0
     , shape = shape
-    , scale = 2
+    , scale = Linear 0
     }
 
 
@@ -246,12 +256,12 @@ update msg model =
         GotSvg output ->
             ( model, download "your-svg" output )
 
-        SetRotation str ->
+        SetRotation transformation ->
             ( { model
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | rotation = Maybe.withDefault 0 <| String.toInt str })
+                        (\x -> { x | rotation = transformation })
                         model.objects
               }
             , Cmd.none
@@ -310,34 +320,34 @@ update msg model =
         --       }
         --     , Cmd.none
         --     )
-        SetXShift str ->
+        SetXShift transformation ->
             ( { model
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | xShift = Maybe.withDefault 0 <| String.toFloat str })
+                        (\x -> { x | xShift = transformation })
                         model.objects
               }
             , Cmd.none
             )
 
-        SetYShift str ->
+        SetYShift transformation ->
             ( { model
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | yShift = Maybe.withDefault 0 <| String.toFloat str })
+                        (\x -> { x | yShift = transformation })
                         model.objects
               }
             , Cmd.none
             )
 
-        SetScale str ->
+        SetScale transformation ->
             ( { model
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | scale = Maybe.withDefault 0 <| String.toFloat str })
+                        (\x -> { x | scale = transformation })
                         model.objects
               }
             , Cmd.none
@@ -420,6 +430,9 @@ update msg model =
             ( { model | guidesVisible = bool }
             , Cmd.none
             )
+
+        NoOp ->
+            ( model, Cmd.none )
 
 
 download : String -> String -> Cmd msg
@@ -536,24 +549,14 @@ view model =
                 "0"
                 (String.fromInt canvasHeight)
             , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
-            , viewSlider model
-                "Rotation"
-                (String.fromInt << .rotation)
-                SetRotation
-                "-180"
-                "180"
-            , viewSlider model
-                "X-Shift"
-                (String.fromFloat << .xShift)
-                SetXShift
-                "-300"
-                "300"
-            , viewSlider model
-                "Y-Shift"
-                (String.fromFloat << .yShift)
-                SetYShift
-                "-300"
-                "300"
+            , controlContainer "Rotation" <|
+                viewTransformation model .rotation SetRotation
+            , controlContainer "X-Shift" <|
+                viewTransformation model .xShift SetXShift
+            , controlContainer "Y-Shift" <|
+                viewTransformation model .yShift SetYShift
+            , controlContainer "Scale" <|
+                viewTransformation model .scale SetScale
 
             -- , viewSlider model
             --     "Width"
@@ -567,12 +570,6 @@ view model =
             --     SetHeight
             --     "0"
             --     "400"
-            , viewSlider model
-                "Scale"
-                (String.fromFloat << .scale)
-                SetScale
-                "-20"
-                "20"
             , viewObjectSelector model
             , Html.button [ Html.Events.onClick AddSquare ] [ Html.text "Another Square" ]
             , Html.button [ Html.Events.onClick AddCircle ] [ Html.text "Another Circle" ]
@@ -586,6 +583,127 @@ view model =
             , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
             ]
         ]
+
+
+controlContainer : String -> Html Msg -> Html Msg
+controlContainer name control =
+    Html.div
+        [ Html.Attributes.style "border" "1px solid black"
+        , Html.Attributes.style "padding" "8px"
+        , Html.Attributes.style "margin-bottom" "8px"
+        ]
+        [ Html.span
+            [ Html.Attributes.style "font-weight" "700"
+            ]
+            [ Html.text <| name ++ ": " ]
+        , control
+        ]
+
+
+viewTransformation : Model -> (Object -> Transformation) -> (Transformation -> Msg) -> Html Msg
+viewTransformation model acc transformationMsg =
+    case getSelectedObject model of
+        Just o ->
+            transformationView (acc o) transformationMsg
+
+        Nothing ->
+            Html.text ""
+
+
+transformationView : Transformation -> (Transformation -> Msg) -> Html Msg
+transformationView transformation transformationMsg =
+    let
+        msg str =
+            case str of
+                "Linear" ->
+                    transformationMsg (Linear 0)
+
+                "Cyclical" ->
+                    transformationMsg (Cyclical { amplitude = 1, frequency = 1 })
+
+                _ ->
+                    NoOp
+
+        linearMsg =
+            String.toFloat
+                >> Maybe.withDefault 0
+                >> Linear
+                >> transformationMsg
+
+        renderOption =
+            Html.select [ Html.Events.onInput msg ]
+                [ Html.option
+                    [ Html.Attributes.value "Linear"
+                    , Html.Attributes.selected (toOption transformation == "Linear")
+                    ]
+                    [ Html.text "Linear" ]
+                , Html.option
+                    [ Html.Attributes.value "Cyclical"
+                    , Html.Attributes.selected (toOption transformation == "Cyclical")
+                    ]
+                    [ Html.text "Cyclical" ]
+                ]
+
+        amplitudeInput d =
+            String.toFloat
+                >> Maybe.withDefault 0
+                >> (\a -> Cyclical { d | amplitude = a })
+                >> transformationMsg
+
+        frequencyInput d =
+            String.toFloat
+                >> Maybe.withDefault 0
+                >> (\a -> Cyclical { d | frequency = a })
+                >> transformationMsg
+
+        renderToggler =
+            case transformation of
+                Linear float ->
+                    Html.input
+                        [ Html.Attributes.value (String.fromFloat float)
+                        , Html.Events.onInput linearMsg
+                        ]
+                        []
+
+                Cyclical d ->
+                    Html.div []
+                        [ Html.div []
+                            [ Html.label []
+                                [ Html.text "Amplitude:"
+                                , Html.input
+                                    [ Html.Attributes.value (String.fromFloat d.amplitude)
+                                    , Html.Events.onInput (amplitudeInput d)
+                                    ]
+                                    []
+                                ]
+                            ]
+                        , Html.div []
+                            [ Html.label []
+                                [ Html.text "Frequency:"
+                                , Html.input
+                                    [ Html.Attributes.value (String.fromFloat d.frequency)
+                                    , Html.Events.onInput (frequencyInput d)
+                                    ]
+                                    []
+                                ]
+                            ]
+                        ]
+    in
+    Html.div
+        []
+        [ renderOption
+        , renderToggler
+        ]
+
+
+toOption : Transformation -> String
+toOption transformation =
+    case transformation of
+        Linear _ ->
+            "Linear"
+
+        Cyclical _ ->
+            "Cyclical"
 
 
 canvasWidth =
@@ -624,9 +742,19 @@ viewObjectSelector model =
                       else
                         Html.Attributes.style "color" "black"
                     ]
-                    [ Html.text <| "Square " ++ String.fromInt id ]
+                    [ Html.text <| objectLabel obj ++ " " ++ String.fromInt id ]
             )
         |> Html.ul []
+
+
+objectLabel : Object -> String
+objectLabel object =
+    case object.shape of
+        Square _ ->
+            "Square"
+
+        Circle _ ->
+            "Circle"
 
 
 isSelected : Model -> Id -> Bool
@@ -713,55 +841,72 @@ viewShadow object loop =
                 , transform <| calculatedRotation loop object
                 , cx (String.fromFloat <| calculatedX loop object)
                 , cy (String.fromFloat <| calculatedY loop object)
-                , r (String.fromFloat <| calculatedRadius loop object.scale circleData)
+                , r (String.fromFloat <| calculatedWidth loop object / 2)
                 ]
                 []
 
 
+transformationByLoop : Int -> Transformation -> Float
+transformationByLoop loop transformation =
+    case transformation of
+        Linear float ->
+            float * toFloat loop
+
+        Cyclical data ->
+            (sin (toFloat loop / data.frequency) + 1) * data.amplitude
+
+
 calculatedX : Int -> Object -> Float
 calculatedX loop object =
-    object.x
-        - (calculatedWidth loop object / 2)
-        + (object.xShift * toFloat loop)
+    case object.shape of
+        Square _ ->
+            object.x
+                - (calculatedWidth loop object / 2)
+                + transformationByLoop loop object.xShift
+
+        Circle _ ->
+            object.x
+                + transformationByLoop loop object.xShift
 
 
 calculatedY : Int -> Object -> Float
 calculatedY loop object =
-    object.y
-        - (calculatedHeight loop object / 2)
-        + (object.yShift * toFloat loop)
+    case object.shape of
+        Square _ ->
+            object.y
+                - (calculatedHeight loop object / 2)
+                + transformationByLoop loop object.yShift
+
+        Circle _ ->
+            object.y
+                + transformationByLoop loop object.yShift
 
 
 calculatedWidth : Int -> Object -> Float
 calculatedWidth loop object =
     case object.shape of
         Square squareData ->
-            squareData.width + (toFloat loop * object.scale)
+            squareData.width + transformationByLoop loop object.scale
 
         Circle circleData ->
-            2 * circleData.radius + (toFloat loop * object.scale)
+            2 * circleData.radius + transformationByLoop loop object.scale
 
 
 calculatedHeight : Int -> Object -> Float
 calculatedHeight loop object =
     case object.shape of
         Square squareData ->
-            squareData.height + (toFloat loop * object.scale)
+            squareData.height + transformationByLoop loop object.scale
 
         Circle circleData ->
-            2 * circleData.radius + (toFloat loop * object.scale)
-
-
-calculatedRadius : Int -> Float -> CircleData -> Float
-calculatedRadius loop scale circleData =
-    circleData.radius + (toFloat loop * scale)
+            2 * circleData.radius + transformationByLoop loop object.scale
 
 
 calculatedRotation : Int -> Object -> String
 calculatedRotation loop object =
     String.concat
         [ "rotate("
-        , String.fromInt <| loop * object.rotation
+        , String.fromFloat <| transformationByLoop loop object.rotation
         , ","
         , String.fromInt object.anchorX
         , ","
