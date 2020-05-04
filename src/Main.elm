@@ -44,8 +44,8 @@ type Msg
       -- | SetWidth String
       -- | SetHeight String
     | SetScale String
-    | SetXShift String
-    | SetYShift String
+    | SetAnchorX String
+    | SetAnchorY String
     | Center
     | Delete
     | SelectObject (Maybe Id)
@@ -57,11 +57,11 @@ type Msg
 type alias Object =
     { x : Float
     , y : Float
+    , anchorX : Int
+    , anchorY : Int
     , loops : Int
     , scale : Float
     , rotation : Int
-    , xShift : Int
-    , yShift : Int
     , shape : Shape
     }
 
@@ -136,8 +136,8 @@ initShape shape =
     , rotation = 25
     , shape = shape
     , scale = 2
-    , xShift = 0
-    , yShift = 0
+    , anchorX = canvasWidth // 2
+    , anchorY = canvasHeight // 2
     }
 
 
@@ -315,23 +315,23 @@ update msg model =
             , Cmd.none
             )
 
-        SetXShift str ->
+        SetAnchorX str ->
             ( { model
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | xShift = Maybe.withDefault 0 <| String.toInt str })
+                        (\x -> { x | anchorX = Maybe.withDefault 0 <| String.toInt str })
                         model.objects
               }
             , Cmd.none
             )
 
-        SetYShift str ->
+        SetAnchorY str ->
             ( { model
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | yShift = Maybe.withDefault 0 <| String.toInt str })
+                        (\x -> { x | anchorY = Maybe.withDefault 0 <| String.toInt str })
                         model.objects
               }
             , Cmd.none
@@ -522,17 +522,17 @@ view model =
                 "-20"
                 "20"
             , viewSlider model
-                "X-Shift"
-                (String.fromInt << .xShift)
-                SetXShift
-                "-600"
-                "600"
+                "Anchor X"
+                (String.fromInt << .anchorX)
+                SetAnchorX
+                "0"
+                (String.fromFloat canvasWidth)
             , viewSlider model
-                "Y-Shift"
-                (String.fromInt << .yShift)
-                SetYShift
-                "-600"
-                "600"
+                "Anchor Y"
+                (String.fromInt << .anchorY)
+                SetAnchorY
+                "0"
+                (String.fromFloat canvasHeight)
             , viewObjectSelector model
             , Html.button [ Html.Events.onClick AddSquare ] [ Html.text "Another Square" ]
             , Html.button [ Html.Events.onClick AddCircle ] [ Html.text "Another Circle" ]
@@ -719,9 +719,9 @@ calculatedRotation loop object =
         [ "rotate("
         , String.fromInt <| loop * object.rotation
         , ","
-        , String.fromFloat (object.x + toFloat object.xShift)
+        , String.fromInt object.anchorX
         , ","
-        , String.fromFloat (object.y + toFloat object.yShift)
+        , String.fromInt object.anchorY
         , ")"
         ]
 
