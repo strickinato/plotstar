@@ -41,28 +41,44 @@ type Msg
     | SetLoops String
     | SetX String
     | SetY String
-    | SetWidth String
-    | SetHeight String
+      -- | SetWidth String
+      -- | SetHeight String
     | SetScale String
     | SetXShift String
     | SetYShift String
     | Center
     | Delete
     | SelectObject (Maybe Id)
-    | AddShape
+    | AddSquare
+    | AddCircle -- Todo generalize
     | SetGuidesVisible Bool
 
 
 type alias Object =
     { x : Float
     , y : Float
-    , width : Int
-    , height : Int
     , loops : Int
     , scale : Float
     , rotation : Int
     , xShift : Int
     , yShift : Int
+    , shape : Shape
+    }
+
+
+type Shape
+    = Square SquareData
+    | Circle CircleData
+
+
+type alias SquareData =
+    { height : Float
+    , width : Float
+    }
+
+
+type alias CircleData =
+    { radius : Float
     }
 
 
@@ -105,24 +121,34 @@ init : Model
 init =
     { objects =
         Dict.fromList
-            [ ( 0, initShape ) ]
+            [ ( 0, initShape defaultCircle ) ]
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
     , guidesVisible = True
     }
 
 
-initShape =
+initShape : Shape -> Object
+initShape shape =
     { x = canvasWidth / 2
     , y = canvasHeight / 2
     , loops = 72
     , rotation = 25
-    , width = 50
-    , height = 50
+    , shape = shape
     , scale = 2
     , xShift = 0
     , yShift = 0
     }
+
+
+defaultSquare : Shape
+defaultSquare =
+    Square { width = 50, height = 50 }
+
+
+defaultCircle : Shape
+defaultCircle =
+    Circle { radius = 25 }
 
 
 type alias Rect =
@@ -258,28 +284,26 @@ update msg model =
             , Cmd.none
             )
 
-        SetWidth str ->
-            ( { model
-                | objects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | width = Maybe.withDefault 0 <| String.toInt str })
-                        model.objects
-              }
-            , Cmd.none
-            )
-
-        SetHeight str ->
-            ( { model
-                | objects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | height = Maybe.withDefault 0 <| String.toInt str })
-                        model.objects
-              }
-            , Cmd.none
-            )
-
+        -- SetWidth str ->
+        --     ( { model
+        --         | objects =
+        --             updateObject
+        --                 model.selectedObjectId
+        --                 (\x -> { x | width = Maybe.withDefault 0 <| String.toInt str })
+        --                 model.objects
+        --       }
+        --     , Cmd.none
+        --     )
+        -- SetHeight str ->
+        --     ( { model
+        --         | objects =
+        --             updateObject
+        --                 model.selectedObjectId
+        --                 (\x -> { x | height = Maybe.withDefault 0 <| String.toInt str })
+        --                 model.objects
+        --       }
+        --     , Cmd.none
+        --     )
         SetScale str ->
             ( { model
                 | objects =
@@ -346,10 +370,19 @@ update msg model =
             , Cmd.none
             )
 
-        AddShape ->
+        AddSquare ->
             let
                 ( newSelectedId, newObjects ) =
-                    insertShape model.objects
+                    insertShape defaultSquare model.objects
+            in
+            ( { model | objects = newObjects, selectedObjectId = Just newSelectedId }
+            , Cmd.none
+            )
+
+        AddCircle ->
+            let
+                ( newSelectedId, newObjects ) =
+                    insertShape defaultCircle model.objects
             in
             ( { model | objects = newObjects, selectedObjectId = Just newSelectedId }
             , Cmd.none
@@ -366,13 +399,13 @@ download fileName svg =
     Download.string (String.append fileName ".svg") "image/svg+xml" svg
 
 
-insertShape : Dict Int Object -> ( Int, Dict Int Object )
-insertShape dict =
+insertShape : Shape -> Dict Int Object -> ( Int, Dict Int Object )
+insertShape shape dict =
     let
         newKey =
             nextKey dict
     in
-    ( newKey, Dict.insert newKey initShape dict )
+    ( newKey, Dict.insert newKey (initShape shape) dict )
 
 
 nextKey : Dict Int Object -> Int
@@ -469,18 +502,19 @@ view model =
                 "0"
                 (String.fromInt canvasHeight)
             , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
-            , viewSlider model
-                "Width"
-                (String.fromInt << .width)
-                SetWidth
-                "0"
-                "400"
-            , viewSlider model
-                "Height"
-                (String.fromInt << .height)
-                SetHeight
-                "0"
-                "400"
+
+            -- , viewSlider model
+            --     "Width"
+            --     (String.fromInt << .width)
+            --     SetWidth
+            --     "0"
+            --     "400"
+            -- , viewSlider model
+            --     "Height"
+            --     (String.fromInt << .height)
+            --     SetHeight
+            --     "0"
+            --     "400"
             , viewSlider model
                 "Scale"
                 (String.fromFloat << .scale)
@@ -500,7 +534,8 @@ view model =
                 "-600"
                 "600"
             , viewObjectSelector model
-            , Html.button [ Html.Events.onClick AddShape ] [ Html.text "Another Square" ]
+            , Html.button [ Html.Events.onClick AddSquare ] [ Html.text "Another Square" ]
+            , Html.button [ Html.Events.onClick AddCircle ] [ Html.text "Another Circle" ]
             , toggle SetGuidesVisible model.guidesVisible "Show Guides"
             , case model.selectedObjectId of
                 Just _ ->
@@ -610,22 +645,37 @@ viewObject model ( id, object ) =
     let
         shadows =
             List.range 1 (object.loops - 1)
-                |> List.map
-                    (\loop ->
-                        Svg.rect
-                            [ fill "none"
-                            , stroke "black"
-                            , transform <| calculatedRotation loop object
-                            , x (String.fromFloat <| calculatedX loop object)
-                            , y (String.fromFloat <| calculatedY loop object)
-                            , width (String.fromFloat <| calculatedWidth loop object)
-                            , height (String.fromFloat <| calculatedHeight loop object)
-                            ]
-                            []
-                    )
+                |> List.map (viewShadow object)
     in
     (renderMain model ( id, object ) :: shadows)
         |> Svg.g []
+
+
+viewShadow : Object -> Int -> Svg Msg
+viewShadow object loop =
+    case object.shape of
+        Square squareData ->
+            Svg.rect
+                [ fill "none"
+                , stroke "black"
+                , transform <| calculatedRotation loop object
+                , x (String.fromFloat <| calculatedX loop object)
+                , y (String.fromFloat <| calculatedY loop object)
+                , width (String.fromFloat <| calculatedWidth loop object)
+                , height (String.fromFloat <| calculatedHeight loop object)
+                ]
+                []
+
+        Circle circleData ->
+            Svg.circle
+                [ fill "none"
+                , stroke "black"
+                , transform <| calculatedRotation loop object
+                , cx (String.fromFloat <| calculatedX loop object)
+                , cy (String.fromFloat <| calculatedY loop object)
+                , r (String.fromFloat <| calculatedRadius loop object.scale circleData)
+                ]
+                []
 
 
 calculatedX : Int -> Object -> Float
@@ -640,12 +690,27 @@ calculatedY loop object =
 
 calculatedWidth : Int -> Object -> Float
 calculatedWidth loop object =
-    toFloat object.width + (toFloat loop * object.scale)
+    case object.shape of
+        Square squareData ->
+            squareData.width + (toFloat loop * object.scale)
+
+        Circle circleData ->
+            2 * circleData.radius + (toFloat loop * object.scale)
 
 
 calculatedHeight : Int -> Object -> Float
 calculatedHeight loop object =
-    toFloat object.height + (toFloat loop * object.scale)
+    case object.shape of
+        Square squareData ->
+            squareData.height + (toFloat loop * object.scale)
+
+        Circle circleData ->
+            2 * circleData.radius + (toFloat loop * object.scale)
+
+
+calculatedRadius : Int -> Float -> CircleData -> Float
+calculatedRadius loop scale circleData =
+    circleData.radius + (toFloat loop * scale)
 
 
 calculatedRotation : Int -> Object -> String
@@ -671,16 +736,29 @@ renderMain { guidesVisible, selectedObjectId } ( id, object ) =
             else
                 "black"
     in
-    Svg.rect
-        [ fill "none"
-        , stroke color
-        , x (String.fromFloat <| object.x - (toFloat object.width / 2))
-        , y (String.fromFloat <| (object.y - toFloat object.height / 2))
-        , width (String.fromInt object.width)
-        , height (String.fromInt object.height)
-        , attribute "data-beacon" <| String.fromInt id
-        ]
-        []
+    case object.shape of
+        Square squareData ->
+            Svg.rect
+                [ fill "none"
+                , stroke color
+                , x (String.fromFloat <| calculatedX 0 object)
+                , y (String.fromFloat <| calculatedY 0 object)
+                , width (String.fromFloat squareData.width)
+                , height (String.fromFloat squareData.height)
+                , attribute "data-beacon" <| String.fromInt id
+                ]
+                []
+
+        Circle circleData ->
+            Svg.circle
+                [ fill "none"
+                , stroke color
+                , cx (String.fromFloat <| calculatedX 0 object)
+                , cy (String.fromFloat <| calculatedY 0 object)
+                , r (String.fromFloat <| circleData.radius)
+                , attribute "data-beacon" <| String.fromInt id
+                ]
+                []
 
 
 toggle : (Bool -> Msg) -> Bool -> String -> Html Msg
