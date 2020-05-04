@@ -8,6 +8,7 @@ import Html.Attributes exposing (attribute, style)
 import Html.Events
 import Json.Decode
 import Maybe.Extra as Maybe
+import Random
 import Svg exposing (Svg)
 import Svg.Attributes exposing (cx, cy, fill, height, points, r, stroke, transform, viewBox, width, x, y)
 
@@ -74,10 +75,15 @@ type alias Object =
 type Transformation
     = Linear Float
     | Cyclical CycleData
+    | Random RandomData
 
 
 type alias CycleData =
     { amplitude : Float, frequency : Float }
+
+
+type alias RandomData =
+    { min : Float, max : Float, seed : Random.Seed }
 
 
 type Shape
@@ -621,6 +627,9 @@ transformationView transformation transformationMsg =
                 "Cyclical" ->
                     transformationMsg (Cyclical { amplitude = 1, frequency = 1 })
 
+                "Random" ->
+                    transformationMsg (Random { min = 1, max = 10, seed = Random.initialSeed 0 })
+
                 _ ->
                     NoOp
 
@@ -642,6 +651,11 @@ transformationView transformation transformationMsg =
                     , Html.Attributes.selected (toOption transformation == "Cyclical")
                     ]
                     [ Html.text "Cyclical" ]
+                , Html.option
+                    [ Html.Attributes.value "Random"
+                    , Html.Attributes.selected (toOption transformation == "Random")
+                    ]
+                    [ Html.text "Random" ]
                 ]
 
         amplitudeInput d =
@@ -654,6 +668,18 @@ transformationView transformation transformationMsg =
             String.toFloat
                 >> Maybe.withDefault 0
                 >> (\a -> Cyclical { d | frequency = a })
+                >> transformationMsg
+
+        minInput d =
+            String.toFloat
+                >> Maybe.withDefault 0
+                >> (\a -> Random { d | min = a })
+                >> transformationMsg
+
+        maxInput d =
+            String.toFloat
+                >> Maybe.withDefault 0
+                >> (\a -> Random { d | max = a })
                 >> transformationMsg
 
         renderToggler =
@@ -688,6 +714,30 @@ transformationView transformation transformationMsg =
                                 ]
                             ]
                         ]
+
+                Random d ->
+                    Html.div []
+                        [ Html.div []
+                            [ Html.label []
+                                [ Html.text "Min:"
+                                , Html.input
+                                    [ Html.Attributes.value (String.fromFloat d.min)
+                                    , Html.Events.onInput (minInput d)
+                                    ]
+                                    []
+                                ]
+                            ]
+                        , Html.div []
+                            [ Html.label []
+                                [ Html.text "Max:"
+                                , Html.input
+                                    [ Html.Attributes.value (String.fromFloat d.max)
+                                    , Html.Events.onInput (maxInput d)
+                                    ]
+                                    []
+                                ]
+                            ]
+                        ]
     in
     Html.div
         []
@@ -704,6 +754,9 @@ toOption transformation =
 
         Cyclical _ ->
             "Cyclical"
+
+        Random _ ->
+            "Random"
 
 
 canvasWidth =
@@ -854,6 +907,22 @@ transformationByLoop loop transformation =
 
         Cyclical data ->
             (sin (toFloat loop / data.frequency) + 1) * data.amplitude
+
+        Random data ->
+            let
+                generator =
+                    Random.float data.min data.max
+
+                generated =
+                    Random.step generator (Random.initialSeed <| floor (toFloat loop * data.min * data.max))
+
+                fn : Int -> ( Float, Random.Seed ) -> ( Float, Random.Seed )
+                fn _ ( _, newSeed ) =
+                    Random.step generator newSeed
+            in
+            List.range 1 loop
+                |> List.foldl fn generated
+                |> Tuple.first
 
 
 calculatedX : Int -> Object -> Float
