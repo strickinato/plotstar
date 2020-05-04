@@ -41,11 +41,13 @@ type Msg
     | SetLoops String
     | SetX String
     | SetY String
-      -- | SetWidth String
-      -- | SetHeight String
-    | SetScale String
     | SetAnchorX String
     | SetAnchorY String
+      -- | SetWidth String
+      -- | SetHeight String
+    | SetXShift String
+    | SetYShift String
+    | SetScale String
     | Center
     | Delete
     | SelectObject (Maybe Id)
@@ -60,6 +62,8 @@ type alias Object =
     , anchorX : Int
     , anchorY : Int
     , loops : Int
+    , xShift : Float
+    , yShift : Float
     , scale : Float
     , rotation : Int
     , shape : Shape
@@ -132,12 +136,14 @@ initShape : Shape -> Object
 initShape shape =
     { x = canvasWidth / 2
     , y = canvasHeight / 2
+    , anchorX = canvasWidth // 2
+    , anchorY = canvasHeight // 2
+    , xShift = 0
+    , yShift = 0
     , loops = 72
     , rotation = 25
     , shape = shape
     , scale = 2
-    , anchorX = canvasWidth // 2
-    , anchorY = canvasHeight // 2
     }
 
 
@@ -304,6 +310,28 @@ update msg model =
         --       }
         --     , Cmd.none
         --     )
+        SetXShift str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | xShift = Maybe.withDefault 0 <| String.toFloat str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
+        SetYShift str ->
+            ( { model
+                | objects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | yShift = Maybe.withDefault 0 <| String.toFloat str })
+                        model.objects
+              }
+            , Cmd.none
+            )
+
         SetScale str ->
             ( { model
                 | objects =
@@ -484,11 +512,17 @@ view model =
                 "1"
                 "360"
             , viewSlider model
-                "Rotation"
-                (String.fromInt << .rotation)
-                SetRotation
-                "-180"
-                "180"
+                "Anchor X"
+                (String.fromInt << .anchorX)
+                SetAnchorX
+                "0"
+                (String.fromFloat canvasWidth)
+            , viewSlider model
+                "Anchor Y"
+                (String.fromInt << .anchorY)
+                SetAnchorY
+                "0"
+                (String.fromFloat canvasHeight)
             , viewSlider model
                 "X"
                 (String.fromFloat << .x)
@@ -502,6 +536,24 @@ view model =
                 "0"
                 (String.fromInt canvasHeight)
             , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
+            , viewSlider model
+                "Rotation"
+                (String.fromInt << .rotation)
+                SetRotation
+                "-180"
+                "180"
+            , viewSlider model
+                "X-Shift"
+                (String.fromFloat << .xShift)
+                SetXShift
+                "-300"
+                "300"
+            , viewSlider model
+                "Y-Shift"
+                (String.fromFloat << .yShift)
+                SetYShift
+                "-300"
+                "300"
 
             -- , viewSlider model
             --     "Width"
@@ -521,18 +573,6 @@ view model =
                 SetScale
                 "-20"
                 "20"
-            , viewSlider model
-                "Anchor X"
-                (String.fromInt << .anchorX)
-                SetAnchorX
-                "0"
-                (String.fromFloat canvasWidth)
-            , viewSlider model
-                "Anchor Y"
-                (String.fromInt << .anchorY)
-                SetAnchorY
-                "0"
-                (String.fromFloat canvasHeight)
             , viewObjectSelector model
             , Html.button [ Html.Events.onClick AddSquare ] [ Html.text "Another Square" ]
             , Html.button [ Html.Events.onClick AddCircle ] [ Html.text "Another Circle" ]
@@ -680,12 +720,16 @@ viewShadow object loop =
 
 calculatedX : Int -> Object -> Float
 calculatedX loop object =
-    object.x - (calculatedWidth loop object / 2)
+    object.x
+        - (calculatedWidth loop object / 2)
+        + (object.xShift * toFloat loop)
 
 
 calculatedY : Int -> Object -> Float
 calculatedY loop object =
-    object.y - (calculatedHeight loop object / 2)
+    object.y
+        - (calculatedHeight loop object / 2)
+        + (object.yShift * toFloat loop)
 
 
 calculatedWidth : Int -> Object -> Float
