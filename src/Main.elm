@@ -524,40 +524,56 @@ view model =
             , Html.Attributes.style "flex-direction" "column"
             , Html.Attributes.style "padding-left" "24px"
             ]
-            [ Html.h3 [] [ Html.text "Controls" ]
-            , viewSlider model
-                "Loops"
-                (String.fromInt << .loops)
-                SetLoops
-                "1"
-                "360"
-            , viewSlider model
-                "Anchor X"
-                (String.fromInt << .anchorX)
-                SetAnchorX
-                "0"
-                (String.fromFloat canvasWidth)
-            , viewSlider model
-                "Anchor Y"
-                (String.fromInt << .anchorY)
-                SetAnchorY
-                "0"
-                (String.fromFloat canvasHeight)
-            , viewSlider model
-                "X"
-                (String.fromFloat << .x)
-                SetX
-                "0"
-                (String.fromInt canvasWidth)
-            , viewSlider model
-                "Y"
-                (String.fromFloat << .y)
-                SetY
-                "0"
-                (String.fromInt canvasHeight)
-            , Html.button [ Html.Events.onClick Center ] [ Html.text "Center" ]
+            [ Html.h3 [] [ Html.text "Shape Attributes" ]
+            , controlContainer "Shadow Repititions" <|
+                Html.div []
+                    [ viewSlider model
+                        "Number"
+                        (String.fromInt << .loops)
+                        SetLoops
+                        "1"
+                        "360"
+                    ]
+            , controlContainer "Position" <|
+                Html.div []
+                    [ Html.div []
+                        [ viewSlider model
+                            "X"
+                            (String.fromFloat << .x)
+                            SetX
+                            "0"
+                            (String.fromInt canvasWidth)
+                        ]
+                    , Html.div []
+                        [ viewSlider model
+                            "Y"
+                            (String.fromFloat << .y)
+                            SetY
+                            "0"
+                            (String.fromInt canvasHeight)
+                        ]
+                    ]
+            , Html.h3 [] [ Html.text "Loop Transformations" ]
             , controlContainer "Rotation" <|
-                viewTransformation model .rotation SetRotation
+                Html.div []
+                    [ Html.div []
+                        [ viewSlider model
+                            "Anchor X"
+                            (String.fromInt << .anchorX)
+                            SetAnchorX
+                            "0"
+                            (String.fromFloat canvasWidth)
+                        ]
+                    , Html.div []
+                        [ viewSlider model
+                            "Anchor Y"
+                            (String.fromInt << .anchorY)
+                            SetAnchorY
+                            "0"
+                            (String.fromFloat canvasHeight)
+                        , viewTransformation model .rotation SetRotation
+                        ]
+                    ]
             , controlContainer "X-Shift" <|
                 viewTransformation model .xShift SetXShift
             , controlContainer "Y-Shift" <|
@@ -577,17 +593,19 @@ view model =
             --     SetHeight
             --     "0"
             --     "400"
+            , Html.h3 [] [ Html.text "Actions" ]
+            , toggle SetGuidesVisible model.guidesVisible "Show Guides"
+            , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
+            , Html.h3 [] [ Html.text "Shapes" ]
             , viewObjectSelector model
             , Html.button [ Html.Events.onClick AddSquare ] [ Html.text "Another Square" ]
             , Html.button [ Html.Events.onClick AddCircle ] [ Html.text "Another Circle" ]
-            , toggle SetGuidesVisible model.guidesVisible "Show Guides"
             , case model.selectedObjectId of
                 Just _ ->
                     Html.button [ Html.Events.onClick Delete ] [ Html.text "delete selected" ]
 
                 Nothing ->
                     Html.text ""
-            , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
             ]
         ]
 
@@ -844,11 +862,7 @@ viewSlider : Model -> String -> (Object -> String) -> (String -> Msg) -> String 
 viewSlider model label accessor msg min max =
     case getSelectedObject model of
         Just o ->
-            Html.label
-                [ Html.Attributes.style "border" "1px solid black"
-                , Html.Attributes.style "padding" "8px"
-                , Html.Attributes.style "margin-bottom" "8px"
-                ]
+            Html.label []
                 [ Html.span
                     []
                     [ Html.text <| label ++ ": " ]
