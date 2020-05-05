@@ -25,7 +25,7 @@ port getSvg : String -> Cmd msg
 type alias Model =
     { objects : Dict Id Object
     , selectedObjectId : Maybe Id
-    , currentDraggable : Maybe Id
+    , currentDraggable : Maybe DraggableIdentifier
     , guidesVisible : Bool
     }
 
@@ -105,7 +105,18 @@ type alias CircleData =
 type alias DragMsg =
     { event : DragEvent
     , cursor : Coords
-    , draggables : List ( Id, Coords )
+    , draggables : List ( DraggableType, Coords )
+    }
+
+
+type DraggableType
+    = ShapeDraggable Id
+    | AttributeDraggable Attribute
+
+
+type alias DraggableIdentifier =
+    { id : DraggableType
+    , dragStart : Coords
     }
 
 
@@ -230,6 +241,10 @@ svgId =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        _ =
+            Debug.log "Current Draggable " model.currentDraggable
+    in
     case msg of
         Drag { event, cursor, draggables } ->
             let
@@ -241,15 +256,29 @@ update msg model =
                                     draggables
                                         |> List.filter
                                             (\( _, draggable ) ->
-                                                distance cursor draggable < 20
+                                                distance cursor draggable < 80
                                             )
-                                        |> closestRect cursor
+                                        |> closestIdentifier cursor
+                                        |> Maybe.map (\identifier -> Just { id = identifier, dragStart = cursor })
+                                        |> Maybe.join
                             }
 
                         Move ->
-                            model.currentDraggable
-                                |> Maybe.map (moveDraggable model cursor)
-                                |> Maybe.withDefault model
+                            case Maybe.map (\a -> Tuple.pair a.id a.dragStart) model.currentDraggable of
+                                Just ( ShapeDraggable id, _ ) ->
+                                    moveDraggable model cursor id
+
+                                Just ( AttributeDraggable attr, coords ) ->
+                                    { model
+                                        | objects =
+                                            updateObject
+                                                model.selectedObjectId
+                                                (attributeUpdater attr (cursor.x - coords.x))
+                                                model.objects
+                                    }
+
+                                Nothing ->
+                                    model
 
                         Stop ->
                             { model | currentDraggable = Nothing }
@@ -526,53 +555,43 @@ view model =
             ]
             [ Html.h3 [] [ Html.text "Shape Attributes" ]
             , controlContainer "Shadow Repititions" <|
-                Html.div []
-                    [ viewSlider model
-                        "Number"
-                        (String.fromInt << .loops)
-                        SetLoops
-                        "1"
-                        "360"
-                    ]
+                withSelectedObject model emptyHtml <|
+                    numberInput
+                        { label = "Number"
+                        , getValue = .loops >> toFloat
+                        , forAttribute = Loops
+                        }
             , controlContainer "Position" <|
                 Html.div []
-                    [ Html.div []
-                        [ viewSlider model
-                            "X"
-                            (String.fromFloat << .x)
-                            SetX
-                            "0"
-                            (String.fromInt canvasWidth)
-                        ]
-                    , Html.div []
-                        [ viewSlider model
-                            "Y"
-                            (String.fromFloat << .y)
-                            SetY
-                            "0"
-                            (String.fromInt canvasHeight)
-                        ]
+                    [ withSelectedObject model emptyHtml <|
+                        numberInput
+                            { label = "X"
+                            , getValue = .x
+                            , forAttribute = X
+                            }
+                    , withSelectedObject model emptyHtml <|
+                        numberInput
+                            { label = "Y"
+                            , getValue = .y
+                            , forAttribute = Y
+                            }
                     ]
             , Html.h3 [] [ Html.text "Loop Transformations" ]
             , controlContainer "Rotation" <|
                 Html.div []
-                    [ Html.div []
-                        [ viewSlider model
-                            "Anchor X"
-                            (String.fromInt << .anchorX)
-                            SetAnchorX
-                            "0"
-                            (String.fromFloat canvasWidth)
-                        ]
-                    , Html.div []
-                        [ viewSlider model
-                            "Anchor Y"
-                            (String.fromInt << .anchorY)
-                            SetAnchorY
-                            "0"
-                            (String.fromFloat canvasHeight)
-                        , viewTransformation model .rotation SetRotation
-                        ]
+                    [ withSelectedObject model emptyHtml <|
+                        numberInput
+                            { label = "AnchorX"
+                            , getValue = .anchorX >> toFloat
+                            , forAttribute = AnchorX
+                            }
+                    , withSelectedObject model emptyHtml <|
+                        numberInput
+                            { label = "AnchorY"
+                            , getValue = .anchorY >> toFloat
+                            , forAttribute = AnchorY
+                            }
+                    , viewTransformation model .rotation SetRotation
                     ]
             , controlContainer "X-Shift" <|
                 viewTransformation model .xShift SetXShift
@@ -606,6 +625,46 @@ view model =
 
                 Nothing ->
                     Html.text ""
+            ]
+        ]
+
+
+emptyHtml : Html Msg
+emptyHtml =
+    Html.span [] []
+
+
+withSelectedObject : Model -> a -> (Object -> a) -> a
+withSelectedObject model default fn =
+    case getSelectedObject model of
+        Just a ->
+            fn a
+
+        Nothing ->
+            default
+
+
+type alias NumberInputConfig =
+    { label : String
+    , getValue : Object -> Float
+    , forAttribute : Attribute
+    }
+
+
+numberInput : NumberInputConfig -> Object -> Html Msg
+numberInput { label, getValue, forAttribute } object =
+    Html.div []
+        [ Html.label
+            [ Html.Attributes.style "cursor" "ew-resize"
+            , Html.Attributes.style "user-select" "none"
+            , attribute "data-beacon" <| attributeToId forAttribute
+            ]
+            [ Html.text <| label ++ ":"
+            , Html.input
+                [ Html.Attributes.value <| String.fromFloat (getValue object)
+                , Html.Attributes.type_ "number"
+                ]
+                []
             ]
         ]
 
@@ -847,9 +906,7 @@ objectLabel object =
 
 isSelected : Model -> Id -> Bool
 isSelected model id =
-    Debug.log "Just Id" (Just id)
-        == model.selectedObjectId
-        |> Debug.log "EQ"
+    Just id == model.selectedObjectId
 
 
 getSelectedObject : Model -> Maybe Object
@@ -1090,7 +1147,7 @@ msgDecoder =
         (Json.Decode.field "beacons" <| Json.Decode.list draggablesDecoder)
 
 
-draggablesDecoder : Json.Decode.Decoder ( Id, Coords )
+draggablesDecoder : Json.Decode.Decoder ( DraggableType, Coords )
 draggablesDecoder =
     Json.Decode.map2
         Tuple.pair
@@ -1098,19 +1155,98 @@ draggablesDecoder =
         coordsDecoder
 
 
-idDecoder : Json.Decode.Decoder Id
+idDecoder : Json.Decode.Decoder DraggableType
 idDecoder =
     Json.Decode.string
-        |> Json.Decode.andThen
-            (\intString ->
-                case String.toInt intString of
-                    Just i ->
-                        Json.Decode.succeed i
-
-                    Nothing ->
-                        Json.Decode.fail "Not a valid Id"
-            )
+        |> Json.Decode.andThen idToType
         |> Json.Decode.field "id"
+
+
+
+-- ATTRIBUTE
+
+
+type Attribute
+    = Loops
+    | X
+    | Y
+    | AnchorX
+    | AnchorY
+
+
+idToType : String -> Json.Decode.Decoder DraggableType
+idToType str =
+    case String.toInt str of
+        Just i ->
+            Json.Decode.succeed <| ShapeDraggable i
+
+        Nothing ->
+            case idToAttribute str of
+                Ok id ->
+                    Json.Decode.succeed id
+
+                Err err ->
+                    Json.Decode.fail "Not a valid Id"
+
+
+attributeToId : Attribute -> String
+attributeToId attr =
+    case attr of
+        Loops ->
+            "loops"
+
+        X ->
+            "x"
+
+        Y ->
+            "y"
+
+        AnchorX ->
+            "anchor-x"
+
+        AnchorY ->
+            "anchor-y"
+
+
+idToAttribute : String -> Result String DraggableType
+idToAttribute str =
+    case str of
+        "loops" ->
+            Ok <| AttributeDraggable Loops
+
+        "x" ->
+            Ok <| AttributeDraggable X
+
+        "y" ->
+            Ok <| AttributeDraggable Y
+
+        "anchor-x" ->
+            Ok <| AttributeDraggable AnchorX
+
+        "anchor-y" ->
+            Ok <| AttributeDraggable AnchorY
+
+        other ->
+            Err <| other ++ " is not a thing"
+
+
+attributeUpdater : Attribute -> Float -> Object -> Object
+attributeUpdater attr value obj =
+    case attr of
+        Loops ->
+            { obj | loops = floor value }
+
+        X ->
+            { obj | x = canvasWidth / 2 + value }
+
+        Y ->
+            { obj | y = canvasHeight / 2 + value }
+
+        AnchorX ->
+            { obj | anchorX = floor <| canvasWidth / 2 + value }
+
+        AnchorY ->
+            { obj | anchorY = floor <| canvasHeight / 2 + value }
 
 
 eventDecoder : Json.Decode.Decoder DragEvent
@@ -1144,8 +1280,8 @@ coordsDecoder =
 -- Functions for manipulating and Coords
 
 
-closestRect : Coords -> List ( Id, Coords ) -> Maybe Int
-closestRect cursor draggables =
+closestIdentifier : Coords -> List ( a, Coords ) -> Maybe a
+closestIdentifier cursor draggables =
     draggables
         |> List.map (Tuple.mapSecond (distance cursor))
         -- Find the vertex closest to the cursor.
