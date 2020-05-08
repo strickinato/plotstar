@@ -8,9 +8,12 @@ import Html.Attributes exposing (attribute, style)
 import Html.Events
 import Json.Decode
 import Maybe.Extra as Maybe
+import Object exposing (Object)
 import Random
+import Shape exposing (Shape(..))
 import Svg exposing (Svg)
 import Svg.Attributes exposing (cx, cy, fill, height, points, r, stroke, transform, viewBox, width, x, y)
+import Transformation exposing (Transformation(..))
 
 
 port dragEvents : (Json.Decode.Value -> msg) -> Sub msg
@@ -56,50 +59,6 @@ type Msg
     | AddCircle -- Todo generalize
     | SetGuidesVisible Bool
     | NoOp
-
-
-type alias Object =
-    { x : Float
-    , y : Float
-    , anchorX : Int
-    , anchorY : Int
-    , loops : Int
-    , xShift : Transformation
-    , yShift : Transformation
-    , scale : Transformation
-    , rotation : Transformation
-    , shape : Shape
-    }
-
-
-type Transformation
-    = Linear Float
-    | Cyclical CycleData
-    | Random RandomData
-
-
-type alias CycleData =
-    { amplitude : Float, frequency : Float }
-
-
-type alias RandomData =
-    { min : Float, max : Float, seed : Random.Seed }
-
-
-type Shape
-    = Square SquareData
-    | Circle CircleData
-
-
-type alias SquareData =
-    { height : Float
-    , width : Float
-    }
-
-
-type alias CircleData =
-    { radius : Float
-    }
 
 
 type alias DragMsg =
@@ -152,82 +111,16 @@ init : Model
 init =
     { objects =
         Dict.fromList
-            [ ( 0, initShape defaultCircle ) ]
+            [ ( 0
+              , Object.initWithShape
+                    canvasWidth
+                    canvasHeight
+                    Shape.defaultCircle
+              )
+            ]
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
     , guidesVisible = True
-    }
-
-
-initShape : Shape -> Object
-initShape shape =
-    { x = canvasWidth / 2
-    , y = canvasHeight / 2
-    , anchorX = canvasWidth // 2
-    , anchorY = canvasHeight // 2
-    , xShift = Linear 0
-    , yShift = Linear 0
-    , loops = 1
-    , rotation = Linear 0
-    , shape = shape
-    , scale = Linear 0
-    }
-
-
-defaultSquare : Shape
-defaultSquare =
-    Square { width = 50, height = 50 }
-
-
-defaultCircle : Shape
-defaultCircle =
-    Circle { radius = 25 }
-
-
-type alias Rect =
-    { x : Float
-    , y : Float
-    , width : Float
-    , height : Float
-    , internalRotation : Float
-    , anchorX : Float
-    , anchorY : Float
-    }
-
-
-type alias Path =
-    List { x : Float, y : Float }
-
-
-type alias Bounds =
-    List { height : Int, width : Int }
-
-
-type BoundedRectangle
-    = In Rect
-    | Clipped Path
-    | Out
-
-
-type alias BoundingBox =
-    { x1 : Float
-    , x2 : Float
-    , y1 : Float
-    , y2 : Float
-    }
-
-
-cut : Rect -> Bounds -> BoundedRectangle
-cut rect bounds =
-    Out
-
-
-getBoundingBox : Rect -> BoundingBox
-getBoundingBox rect =
-    { x1 = 0
-    , x2 = 0
-    , y1 = 0
-    , y2 = 0
     }
 
 
@@ -393,7 +286,7 @@ update msg model =
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | anchorX = Maybe.withDefault 0 <| String.toInt str })
+                        (\x -> { x | anchorX = Maybe.withDefault 0 <| String.toFloat str })
                         model.objects
               }
             , Cmd.none
@@ -404,7 +297,7 @@ update msg model =
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | anchorY = Maybe.withDefault 0 <| String.toInt str })
+                        (\x -> { x | anchorY = Maybe.withDefault 0 <| String.toFloat str })
                         model.objects
               }
             , Cmd.none
@@ -415,7 +308,7 @@ update msg model =
                 | objects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | x = canvasWidth / 2, y = canvasHeight / 2 })
+                        (\x -> { x | x = toFloat canvasWidth / 2, y = toFloat canvasHeight / 2 })
                         model.objects
               }
             , Cmd.none
@@ -446,7 +339,7 @@ update msg model =
         AddSquare ->
             let
                 ( newSelectedId, newObjects ) =
-                    insertShape defaultSquare model.objects
+                    insertShape Shape.defaultSquare model.objects
             in
             ( { model | objects = newObjects, selectedObjectId = Just newSelectedId }
             , Cmd.none
@@ -455,7 +348,7 @@ update msg model =
         AddCircle ->
             let
                 ( newSelectedId, newObjects ) =
-                    insertShape defaultCircle model.objects
+                    insertShape Shape.defaultCircle model.objects
             in
             ( { model | objects = newObjects, selectedObjectId = Just newSelectedId }
             , Cmd.none
@@ -481,7 +374,11 @@ insertShape shape dict =
         newKey =
             nextKey dict
     in
-    ( newKey, Dict.insert newKey (initShape shape) dict )
+    ( newKey
+    , Dict.insert newKey
+        (Object.initWithShape canvasWidth canvasHeight shape)
+        dict
+    )
 
 
 nextKey : Dict Int Object -> Int
@@ -582,13 +479,13 @@ view model =
                     [ withSelectedObject model emptyHtml <|
                         numberInput
                             { label = "AnchorX"
-                            , getValue = .anchorX >> toFloat
+                            , getValue = .anchorX
                             , forAttribute = AnchorX
                             }
                     , withSelectedObject model emptyHtml <|
                         numberInput
                             { label = "AnchorY"
-                            , getValue = .anchorY >> toFloat
+                            , getValue = .anchorY
                             , forAttribute = AnchorY
                             }
                     , viewTransformation model .rotation SetRotation
@@ -834,10 +731,12 @@ toOption transformation =
             "Random"
 
 
+canvasWidth : Int
 canvasWidth =
     1200
 
 
+canvasHeight : Int
 canvasHeight =
     900
 
@@ -848,8 +747,8 @@ viewCenterPoint bool =
         Svg.circle
             [ fill "red"
             , r (String.fromFloat <| 3)
-            , cx (String.fromFloat <| canvasWidth / 2)
-            , cy (String.fromFloat <| canvasHeight / 2)
+            , cx (String.fromInt <| canvasWidth // 2)
+            , cy (String.fromInt <| canvasHeight // 2)
             ]
             []
 
@@ -864,8 +763,8 @@ viewAnchorPoint model =
             Svg.circle
                 [ fill "red"
                 , r (String.fromInt <| 2)
-                , cx (String.fromInt obj.anchorX)
-                , cy (String.fromInt obj.anchorY)
+                , cx (String.fromFloat obj.anchorX)
+                , cy (String.fromFloat obj.anchorY)
                 ]
                 []
 
@@ -1062,9 +961,9 @@ calculatedRotation loop object =
         [ "rotate("
         , String.fromFloat <| transformationByLoop loop object.rotation
         , ","
-        , String.fromInt object.anchorX
+        , String.fromFloat object.anchorX
         , ","
-        , String.fromInt object.anchorY
+        , String.fromFloat object.anchorY
         , ")"
         ]
 
@@ -1234,16 +1133,16 @@ attributeUpdater attr value obj =
             { obj | loops = floor value }
 
         X ->
-            { obj | x = canvasWidth / 2 + value }
+            { obj | x = toFloat canvasWidth / 2 + value }
 
         Y ->
-            { obj | y = canvasHeight / 2 + value }
+            { obj | y = toFloat canvasHeight / 2 + value }
 
         AnchorX ->
-            { obj | anchorX = floor <| canvasWidth / 2 + value }
+            { obj | anchorX = toFloat canvasWidth / 2 + value }
 
         AnchorY ->
-            { obj | anchorY = floor <| canvasHeight / 2 + value }
+            { obj | anchorY = toFloat canvasHeight / 2 + value }
 
 
 eventDecoder : Json.Decode.Decoder DragEvent
