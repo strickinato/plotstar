@@ -697,44 +697,41 @@ viewTransformation model acc transformationMsg =
 transformationView : Transformation -> (Transformation -> Msg) -> Html Msg
 transformationView transformation transformationMsg =
     let
-        msg str =
-            case str of
-                "Linear" ->
-                    transformationMsg (Linear 0)
-
-                "Cyclical" ->
-                    transformationMsg (Cyclical { amplitude = 1, frequency = 1 })
-
-                "Random" ->
-                    transformationMsg (Random { min = 1, max = 10, seed = Random.initialSeed 0 })
-
-                _ ->
-                    NoOp
+        renderRadioOptions =
+            Html.div []
+                [ Html.input
+                    [ Html.Attributes.value "Linear"
+                    , Html.Attributes.checked (toOption transformation == "Linear")
+                    , Html.Attributes.type_ "Radio"
+                    , Html.Events.onCheck (always <| transformationMsg (Linear 0))
+                    ]
+                    []
+                , Html.label [] [ Html.text "Linear" ]
+                , Html.input
+                    [ Html.Attributes.value "Cyclical"
+                    , Html.Attributes.checked (toOption transformation == "Cyclical")
+                    , Html.Attributes.type_ "Radio"
+                    , Html.Events.onCheck
+                        (always <| transformationMsg (Cyclical { amplitude = 1, frequency = 1 }))
+                    ]
+                    []
+                , Html.label [] [ Html.text "Cyclical" ]
+                , Html.input
+                    [ Html.Attributes.value "Random"
+                    , Html.Attributes.checked (toOption transformation == "Random")
+                    , Html.Attributes.type_ "Radio"
+                    , Html.Events.onCheck
+                        (always <| transformationMsg (Random { min = 1, max = 10, seed = Random.initialSeed 0 }))
+                    ]
+                    []
+                , Html.label [] [ Html.text "Random" ]
+                ]
 
         linearMsg =
             String.toFloat
                 >> Maybe.withDefault 0
                 >> Linear
                 >> transformationMsg
-
-        renderOption =
-            Html.select [ Html.Events.onInput msg ]
-                [ Html.option
-                    [ Html.Attributes.value "Linear"
-                    , Html.Attributes.selected (toOption transformation == "Linear")
-                    ]
-                    [ Html.text "Linear" ]
-                , Html.option
-                    [ Html.Attributes.value "Cyclical"
-                    , Html.Attributes.selected (toOption transformation == "Cyclical")
-                    ]
-                    [ Html.text "Cyclical" ]
-                , Html.option
-                    [ Html.Attributes.value "Random"
-                    , Html.Attributes.selected (toOption transformation == "Random")
-                    ]
-                    [ Html.text "Random" ]
-                ]
 
         amplitudeInput d =
             String.toFloat
@@ -819,7 +816,7 @@ transformationView transformation transformationMsg =
     in
     Html.div
         []
-        [ renderOption
+        [ renderRadioOptions
         , renderToggler
         ]
 
