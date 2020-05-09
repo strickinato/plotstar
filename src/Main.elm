@@ -415,8 +415,7 @@ view : Model -> Html Msg
 view model =
     Html.div
         [ Html.Attributes.id "main"
-        , Html.Attributes.style "display" "flex"
-        , Html.Attributes.style "padding" "24px"
+        , Html.Attributes.class "flex p-4"
         ]
         [ Html.div
             [ Html.Attributes.style "border" "2px solid black"
@@ -433,19 +432,17 @@ view model =
                 ]
             ]
         , Html.div
-            [ Html.Attributes.style "display" "flex"
-            , Html.Attributes.style "flex-direction" "column"
-            , Html.Attributes.style "padding-left" "24px"
-            ]
-            [ Html.h3 [] [ Html.text "Shape Attributes" ]
-            , controlContainer "Shadow Repititions" <|
-                withSelectedObject model emptyHtml <|
-                    numberInputNew
-                        { label = "Loops"
-                        , lens = Object.loopFloorLens
-                        }
-            , controlContainer "Position" <|
-                Html.div []
+            [ Html.Attributes.class "flex-col space-y-4 pl-4" ]
+            [ controlContainer <|
+                [ controlSection "Shape Attributes"
+                , controlRow <|
+                    [ withSelectedObject model emptyHtml <|
+                        numberInputNew
+                            { label = "Loops"
+                            , lens = Object.loopFloorLens
+                            }
+                    ]
+                , controlRow <|
                     [ withSelectedObject model emptyHtml <|
                         numberInputNew
                             { label = "X"
@@ -457,9 +454,9 @@ view model =
                             , lens = Object.yLens
                             }
                     ]
-            , Html.h3 [] [ Html.text "Loop Transformations" ]
-            , controlContainer "Rotation" <|
-                Html.div []
+                , controlSection "Transformations"
+                , controlSubSection "Rotation"
+                , controlRow <|
                     [ withSelectedObject model emptyHtml <|
                         numberInputNew
                             { label = "AnchorX"
@@ -470,29 +467,70 @@ view model =
                             { label = "AnchorY"
                             , lens = Object.anchorYLens
                             }
-                    , viewTransformation model Object.rotationLens .rotation SetRotation
                     ]
-            , controlContainer "X-Shift" <|
-                viewTransformation model Object.xShiftLens .xShift SetXShift
-            , controlContainer "Y-Shift" <|
-                viewTransformation model Object.yShiftLens .yShift SetYShift
-            , controlContainer "Scale" <|
-                viewTransformation model Object.scaleLens .scale SetScale
-            , Html.h3 [] [ Html.text "Actions" ]
-            , toggle SetGuidesVisible model.guidesVisible "Show Guides"
-            , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
-            , Html.h3 [] [ Html.text "Shapes" ]
-            , viewObjectSelector model
-            , Html.button [ Html.Events.onClick AddSquare ] [ Html.text "Another Square" ]
-            , Html.button [ Html.Events.onClick AddCircle ] [ Html.text "Another Circle" ]
-            , case model.selectedObjectId of
-                Just _ ->
-                    Html.button [ Html.Events.onClick Delete ] [ Html.text "delete selected" ]
+                , viewTransformation model Object.rotationLens .rotation SetRotation
+                , controlSubSection "X-Shift"
+                , viewTransformation model Object.xShiftLens .xShift SetXShift
+                , controlSubSection "Y-Shift"
+                , viewTransformation model Object.yShiftLens .yShift SetYShift
+                , controlSubSection "Scale"
+                , viewTransformation model Object.scaleLens .scale SetScale
+                ]
+            , controlContainer <|
+                [ controlSection "Actions"
+                , toggle SetGuidesVisible model.guidesVisible "Show Guides"
+                , button Primary GetSvg "Download"
+                ]
+            , controlContainer <|
+                [ controlSection "Shapes"
+                , viewObjectSelector model
+                , controlRow <|
+                    [ button Secondary AddSquare "+ Square"
+                    , button Secondary AddCircle "+ Circle"
+                    ]
+                , case model.selectedObjectId of
+                    Just _ ->
+                        button Caution Delete "Delete Selected"
 
-                Nothing ->
-                    Html.text ""
+                    Nothing ->
+                        Html.text ""
+                ]
             ]
         ]
+
+
+type Level
+    = Primary
+    | Secondary
+    | Caution
+
+
+button : Level -> Msg -> String -> Html Msg
+button level msg text =
+    let
+        colors =
+            case level of
+                Primary ->
+                    "bg-purple-400 hover:bg-purple-200 text-black"
+
+                Secondary ->
+                    "border border-purple-300 hover:bg-purple-200 text-black"
+
+                Caution ->
+                    "border border-orange-300 hover:bg-orange-200 text-black"
+
+        classList =
+            [ ( "font-bold py-2 px-4 align-center rounded", True )
+            , ( colors, True )
+            ]
+
+        -- "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+    in
+    Html.button
+        [ Html.Attributes.classList classList
+        , Html.Events.onClick msg
+        ]
+        [ Html.text text ]
 
 
 emptyHtml : Html Msg
@@ -526,18 +564,18 @@ type alias NumberInputConfigNew =
 
 numberInputNew : NumberInputConfigNew -> Object -> Html Msg
 numberInputNew { label, lens } object =
-    Html.div []
-        [ Html.label
-            [ Html.Attributes.style "cursor" "ew-resize"
-            , Html.Attributes.style "user-select" "none"
-            , Pointer.onMove <| AttributeSlide Move lens
-            , Pointer.onUp <| AttributeSlide Stop lens
-            , downEvent <| Json.Decode.map (AttributeSlide Start lens) Pointer.eventDecoder
-            ]
-            [ Html.text <| label ++ ":"
-            , Html.input
-                [ Html.Attributes.value <| String.fromFloat <| .get lens object
-                , Html.Attributes.style "cursor" "ew-resize"
+    Html.label
+        [ Html.Attributes.style "user-select" "none"
+        , Html.Attributes.class "flex justify-between pr-4 cursor-ew"
+        , Pointer.onMove <| AttributeSlide Move lens
+        , Pointer.onUp <| AttributeSlide Stop lens
+        , downEvent <| Json.Decode.map (AttributeSlide Start lens) Pointer.eventDecoder
+        ]
+        [ Html.div [] [ Html.text <| label ++ ":" ]
+        , Html.div [ Html.Attributes.class "pr-4" ]
+            [ Html.input
+                [ Html.Attributes.class "border border-grey w-12 text-right cursor-ew"
+                , Html.Attributes.value <| String.fromFloat <| .get lens object
                 , Html.Attributes.type_ "number"
                 ]
                 []
@@ -545,19 +583,29 @@ numberInputNew { label, lens } object =
         ]
 
 
-controlContainer : String -> Html Msg -> Html Msg
-controlContainer name control =
+controlContainer : List (Html Msg) -> Html Msg
+controlContainer controls =
     Html.div
-        [ Html.Attributes.style "border" "1px solid black"
-        , Html.Attributes.style "padding" "8px"
-        , Html.Attributes.style "margin-bottom" "8px"
+        [ Html.Attributes.class "border-solid border-4 border-black p-2 max-w-md text-sm"
         ]
-        [ Html.span
-            [ Html.Attributes.style "font-weight" "700"
-            ]
-            [ Html.text <| name ++ ": " ]
-        , control
+        [ Html.div [ Html.Attributes.class "flex-col space-y-2 pt-2" ] controls
         ]
+
+
+controlRow : List (Html Msg) -> Html Msg
+controlRow controls =
+    Html.div [ Html.Attributes.class "grid grid-cols-2" ] <|
+        List.map (\c -> Html.div [ Html.Attributes.class "grid-span-1" ] [ c ]) controls
+
+
+controlSection : String -> Html Msg
+controlSection name =
+    Html.h3 [ Html.Attributes.class "border-b-2" ] [ Html.text name ]
+
+
+controlSubSection : String -> Html Msg
+controlSubSection name =
+    Html.h4 [] [ Html.text name ]
 
 
 viewTransformation : Model -> Lens Object Transformation -> (Object -> Transformation) -> (Transformation -> Msg) -> Html Msg
@@ -570,50 +618,74 @@ viewTransformation model lens acc transformationMsg =
             Html.text ""
 
 
+type alias TabOption =
+    { name : String
+    , selected : Bool
+    , clickMsg : Msg
+    }
+
+
+tabbed : List TabOption -> Html Msg
+tabbed options =
+    Html.div [ Html.Attributes.class "flex border-b" ] <|
+        List.map
+            (\opt ->
+                let
+                    outerClassList =
+                        [ ( "mr-1 cursor-pointer", True )
+                        , ( "-mb-px", opt.selected )
+                        ]
+
+                    innerClassList =
+                        [ ( "inline-block px-2", True )
+                        , ( "bg-white border-l border-t border-r font-bold", opt.selected )
+                        ]
+                in
+                Html.div
+                    [ Html.Attributes.classList outerClassList
+                    , Html.Attributes.tabindex 0
+                    ]
+                    [ Html.div
+                        [ Html.Attributes.classList innerClassList
+                        , Html.Events.onClick opt.clickMsg
+                        ]
+                        [ Html.text opt.name ]
+                    ]
+            )
+            options
+
+
 transformationView : Transformation -> Lens Object Transformation -> (Transformation -> Msg) -> Object -> Html Msg
 transformationView transformation lens transformationMsg object =
     let
-        renderRadioOptions =
-            Html.div []
-                [ Html.input
-                    [ Html.Attributes.value "Linear"
-                    , Html.Attributes.checked (toOption transformation == "Linear")
-                    , Html.Attributes.type_ "Radio"
-                    , Html.Events.onCheck (always <| transformationMsg (Linear 0))
-                    ]
-                    []
-                , Html.label [] [ Html.text "Linear" ]
-                , Html.input
-                    [ Html.Attributes.value "Cyclical"
-                    , Html.Attributes.checked (toOption transformation == "Cyclical")
-                    , Html.Attributes.type_ "Radio"
-                    , Html.Events.onCheck
-                        (always <| transformationMsg (Cyclical { amplitude = 1, frequency = 1 }))
-                    ]
-                    []
-                , Html.label [] [ Html.text "Cyclical" ]
-                , Html.input
-                    [ Html.Attributes.value "Random"
-                    , Html.Attributes.checked (toOption transformation == "Random")
-                    , Html.Attributes.type_ "Radio"
-                    , Html.Events.onCheck
-                        (always <| transformationMsg (Random { min = 1, max = 10, seed = Random.initialSeed 0 }))
-                    ]
-                    []
-                , Html.label [] [ Html.text "Random" ]
-                ]
+        transformationEq t =
+            t == toOption transformation
+
+        tabOptions =
+            [ TabOption "Linear"
+                (transformationEq "Linear")
+                (transformationMsg (Linear 0))
+            , TabOption "Cyclical"
+                (transformationEq "Cyclical")
+                (transformationMsg (Cyclical { amplitude = 1, frequency = 1 }))
+            , TabOption "Random"
+                (transformationEq "Random")
+                (transformationMsg (Random { min = 0, max = 100, seed = Random.initialSeed 0 }))
+            ]
 
         renderToggler =
             case transformation of
                 Linear float ->
-                    numberInputNew
-                        { label = "Number"
-                        , lens = Lens.compose lens (Transformation.linearLens 0)
-                        }
-                        object
+                    controlRow <|
+                        [ numberInputNew
+                            { label = "Number"
+                            , lens = Lens.compose lens (Transformation.linearLens 0)
+                            }
+                            object
+                        ]
 
                 Cyclical d ->
-                    Html.div []
+                    controlRow <|
                         [ numberInputNew
                             { label = "Amplitude"
                             , lens = Lens.compose lens (Transformation.amplitudeLens 0)
@@ -627,7 +699,7 @@ transformationView transformation lens transformationMsg object =
                         ]
 
                 Random d ->
-                    Html.div []
+                    controlRow <|
                         [ numberInputNew
                             { label = "Min"
                             , lens = Lens.compose lens (Transformation.minLens 0)
@@ -642,8 +714,10 @@ transformationView transformation lens transformationMsg object =
     in
     Html.div
         []
-        [ renderRadioOptions
-        , renderToggler
+        [ tabbed tabOptions
+        , Html.div [ Html.Attributes.class "border-l border-r border-b p-2" ]
+            [ renderToggler
+            ]
         ]
 
 
