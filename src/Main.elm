@@ -55,6 +55,7 @@ type Msg
     | SetScale Transformation
     | SetRotation Transformation
     | AttributeSlide DragEvent (Lens Object Float) Pointer.Event
+    | SetWithLens (Lens Object Float) Float
     | Center
     | Delete
     | SelectObject (Maybe Id)
@@ -203,6 +204,17 @@ update msg model =
 
                 Stop ->
                     ( { model | currentUpdating = ( Nothing, 0 ) }, Cmd.none )
+
+        SetWithLens lens val ->
+            ( { model
+                | objects =
+                    objectsUpdaterNew model.selectedObjectId
+                        lens
+                        (always val)
+                        model.objects
+              }
+            , Cmd.none
+            )
 
         Drag { event, cursor, draggables } ->
             let
@@ -564,9 +576,13 @@ type alias NumberInputConfigNew =
 
 numberInputNew : NumberInputConfigNew -> Object -> Html Msg
 numberInputNew { label, lens } object =
+    let
+        inputMsg str =
+            SetWithLens lens
+                (Maybe.withDefault (.get lens object) (String.toFloat str))
+    in
     Html.label
-        [ Html.Attributes.style "user-select" "none"
-        , Html.Attributes.class "flex justify-between pr-4 cursor-ew"
+        [ Html.Attributes.class "flex justify-between pr-4 cursor-ew"
         , Pointer.onMove <| AttributeSlide Move lens
         , Pointer.onUp <| AttributeSlide Stop lens
         , downEvent <| Json.Decode.map (AttributeSlide Start lens) Pointer.eventDecoder
@@ -577,6 +593,7 @@ numberInputNew { label, lens } object =
                 [ Html.Attributes.class "border border-grey w-12 text-right cursor-ew"
                 , Html.Attributes.value <| String.fromFloat <| .get lens object
                 , Html.Attributes.type_ "number"
+                , Html.Events.onInput inputMsg
                 ]
                 []
             ]
@@ -643,9 +660,8 @@ tabbed options =
                 in
                 Html.div
                     [ Html.Attributes.classList outerClassList
-                    , Html.Attributes.tabindex 0
                     ]
-                    [ Html.div
+                    [ Html.button
                         [ Html.Attributes.classList innerClassList
                         , Html.Events.onClick opt.clickMsg
                         ]
