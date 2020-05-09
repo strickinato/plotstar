@@ -3,11 +3,11 @@ function setupDraggable(sendEvent) {
     const MINIMUM_DRAG_DISTANCE_PX = 10;
 
     function dragEvent(type, event) {
-        sendEvent({
-            type: type,
-            cursor: coords(event),
-            beacons: beaconPositions()
-        });
+        // sendEvent({
+        //     type: type,
+        //     cursor: coords(event),
+        //     beacons: beaconPositions()
+        // });
     }
 
     function dragEnd(event) {

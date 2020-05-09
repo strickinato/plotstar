@@ -38,7 +38,7 @@ type alias Model =
     , selectedObjectId : Maybe Id
     , currentDraggable : Maybe DraggableIdentifier -- TODO get rid of this style of draggable
     , guidesVisible : Bool
-    , currentUpdating : Maybe (Lens Object Float)
+    , currentUpdating : ( Maybe Float, Float ) -- Starting Offset
     }
 
 
@@ -124,7 +124,7 @@ init =
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
     , guidesVisible = True
-    , currentUpdating = Nothing
+    , currentUpdating = ( Nothing, 0 )
     }
 
 
@@ -148,12 +148,12 @@ updateObject maybeId updater objects =
             objects
 
 
-objectsUpdaterNew : Maybe Id -> Lens Object Float -> Float -> Dict Id Object -> Dict Id Object
-objectsUpdaterNew maybeId lens value objects =
+objectsUpdaterNew : Maybe Id -> Lens Object Float -> (Float -> Float) -> Dict Id Object -> Dict Id Object
+objectsUpdaterNew maybeId lens modifier objects =
     case maybeId of
         Just selectedId ->
             Dict.update selectedId
-                (Maybe.map (lens.set value))
+                (Maybe.map (Lens.modify lens modifier))
                 objects
 
         Nothing ->
@@ -164,29 +164,45 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         AttributeSlide eventType lens pointerEvent ->
+            let
+                offset =
+                    Tuple.first pointerEvent.pointer.offsetPos
+            in
             case eventType of
                 Start ->
-                    ( { model | currentUpdating = Just lens }, capture pointerEvent.pointerId )
+                    ( { model | currentUpdating = ( Just offset, offset ) }
+                    , capture pointerEvent.pointerId
+                    )
 
                 Move ->
                     let
                         updated =
                             case model.currentUpdating of
-                                Just _ ->
-                                    objectsUpdaterNew model.selectedObjectId
-                                        lens
-                                        (Tuple.first pointerEvent.pointer.offsetPos)
-                                        model.objects
+                                ( Just firstValue, lastValue ) ->
+                                    let
+                                        modifier f =
+                                            if (offset - lastValue) > 0 then
+                                                f + 1
 
-                                Nothing ->
-                                    model.objects
+                                            else
+                                                f - 1
+                                    in
+                                    { model
+                                        | objects =
+                                            objectsUpdaterNew model.selectedObjectId
+                                                lens
+                                                modifier
+                                                model.objects
+                                        , currentUpdating = ( Just firstValue, offset )
+                                    }
+
+                                ( Nothing, _ ) ->
+                                    model
                     in
-                    ( { model | objects = updated }
-                    , Cmd.none
-                    )
+                    ( updated, Cmd.none )
 
                 Stop ->
-                    ( { model | currentUpdating = Nothing }, Cmd.none )
+                    ( { model | currentUpdating = ( Nothing, 0 ) }, Cmd.none )
 
         Drag { event, cursor, draggables } ->
             let
