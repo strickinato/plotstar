@@ -537,6 +537,7 @@ numberInputNew { label, lens } object =
             [ Html.text <| label ++ ":"
             , Html.input
                 [ Html.Attributes.value <| String.fromFloat <| .get lens object
+                , Html.Attributes.style "cursor" "ew-resize"
                 , Html.Attributes.type_ "number"
                 ]
                 []

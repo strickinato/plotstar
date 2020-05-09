@@ -1,5 +1,6 @@
 yarn-*
 public/elm.js
+public/output.css
 node_modules
 elm-stuff
 .DS_Store
