@@ -1,5 +1,10 @@
 module Object exposing (..)
 
+import LensHelpers exposing (..)
+import Monocle.Compose as Compose
+import Monocle.Iso exposing (Iso)
+import Monocle.Lens exposing (Lens)
+import Monocle.Prism exposing (Prism)
 import Shape exposing (Shape)
 import Transformation exposing (Transformation)
 
@@ -15,6 +20,69 @@ type alias Object =
     , scale : Transformation
     , rotation : Transformation
     , shape : Shape
+    }
+
+
+loopFloorLens : Lens Object Float
+loopFloorLens =
+    { get = toFloat << .loops
+    , set = \flt obj -> { obj | loops = floor flt }
+    }
+
+
+xLens : Lens Object Float
+xLens =
+    { get = .x
+    , set = \flt obj -> { obj | x = flt }
+    }
+
+
+yLens : Lens Object Float
+yLens =
+    { get = .y
+    , set = \flt obj -> { obj | y = flt }
+    }
+
+
+anchorXLens : Lens Object Float
+anchorXLens =
+    { get = .anchorX
+    , set = \flt obj -> { obj | anchorX = flt }
+    }
+
+
+anchorYLens : Lens Object Float
+anchorYLens =
+    { get = .anchorY
+    , set = \flt obj -> { obj | anchorY = flt }
+    }
+
+
+xShiftLens : Lens Object Transformation
+xShiftLens =
+    { get = .xShift
+    , set = \trans obj -> { obj | xShift = trans }
+    }
+
+
+yShiftLens : Lens Object Transformation
+yShiftLens =
+    { get = .yShift
+    , set = \trans obj -> { obj | yShift = trans }
+    }
+
+
+scaleLens : Lens Object Transformation
+scaleLens =
+    { get = .scale
+    , set = \trans obj -> { obj | scale = trans }
+    }
+
+
+rotationLens : Lens Object Transformation
+rotationLens =
+    { get = .rotation
+    , set = \trans obj -> { obj | rotation = trans }
     }
 
 

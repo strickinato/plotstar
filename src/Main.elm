@@ -6,8 +6,13 @@ import File.Download as Download
 import Html exposing (Html)
 import Html.Attributes exposing (attribute, style)
 import Html.Events
+import Html.Events.Extra.Pointer as Pointer
 import Json.Decode
+import Json.Encode
+import LensHelpers
 import Maybe.Extra as Maybe
+import Monocle.Compose as Compose
+import Monocle.Lens as Lens exposing (Lens)
 import Object exposing (Object)
 import Random
 import Shape exposing (Shape(..))
@@ -25,11 +30,15 @@ port gotSvg : (String -> msg) -> Sub msg
 port getSvg : String -> Cmd msg
 
 
+port capture : Int -> Cmd msg
+
+
 type alias Model =
     { objects : Dict Id Object
     , selectedObjectId : Maybe Id
-    , currentDraggable : Maybe DraggableIdentifier
+    , currentDraggable : Maybe DraggableIdentifier -- TODO get rid of this style of draggable
     , guidesVisible : Bool
+    , currentUpdating : Maybe (Lens Object Float)
     }
 
 
@@ -41,17 +50,11 @@ type Msg
     = Drag DragMsg
     | GetSvg
     | GotSvg String
-    | SetLoops String
-    | SetX String
-    | SetY String
-    | SetAnchorX String
-    | SetAnchorY String
-      -- | SetWidth String
-      -- | SetHeight String
     | SetXShift Transformation
     | SetYShift Transformation
     | SetScale Transformation
     | SetRotation Transformation
+    | AttributeSlide DragEvent (Lens Object Float) Pointer.Event
     | Center
     | Delete
     | SelectObject (Maybe Id)
@@ -121,6 +124,7 @@ init =
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
     , guidesVisible = True
+    , currentUpdating = Nothing
     }
 
 
@@ -132,13 +136,58 @@ svgId =
 -- Update logic
 
 
+updateObject : Maybe Id -> (Object -> Object) -> Dict Int Object -> Dict Int Object
+updateObject maybeId updater objects =
+    case maybeId of
+        Just selectedId ->
+            Dict.update selectedId
+                (Maybe.map updater)
+                objects
+
+        Nothing ->
+            objects
+
+
+objectsUpdaterNew : Maybe Id -> Lens Object Float -> Float -> Dict Id Object -> Dict Id Object
+objectsUpdaterNew maybeId lens value objects =
+    case maybeId of
+        Just selectedId ->
+            Dict.update selectedId
+                (Maybe.map (lens.set value))
+                objects
+
+        Nothing ->
+            objects
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        _ =
-            Debug.log "Current Draggable " model.currentDraggable
-    in
     case msg of
+        AttributeSlide eventType lens pointerEvent ->
+            case eventType of
+                Start ->
+                    ( { model | currentUpdating = Just lens }, capture pointerEvent.pointerId )
+
+                Move ->
+                    let
+                        updated =
+                            case model.currentUpdating of
+                                Just _ ->
+                                    objectsUpdaterNew model.selectedObjectId
+                                        lens
+                                        (Tuple.first pointerEvent.pointer.offsetPos)
+                                        model.objects
+
+                                Nothing ->
+                                    model.objects
+                    in
+                    ( { model | objects = updated }
+                    , Cmd.none
+                    )
+
+                Stop ->
+                    ( { model | currentUpdating = Nothing }, Cmd.none )
+
         Drag { event, cursor, draggables } ->
             let
                 newModel =
@@ -162,14 +211,16 @@ update msg model =
                                     moveDraggable model cursor id
 
                                 Just ( AttributeDraggable attr, coords ) ->
-                                    { model
-                                        | objects =
-                                            updateObject
-                                                model.selectedObjectId
-                                                (attributeUpdater attr (cursor.x - coords.x))
-                                                model.objects
-                                    }
+                                    model
 
+                                -- { model
+                                --     | objects =
+                                --         objectsUpdater
+                                --             model.selectedObjectId
+                                --             (attributeToLens attr)
+                                --             (String.fromFloat (cursor.x - coords.x))
+                                --             model.objects
+                                -- }
                                 Nothing ->
                                     model
 
@@ -195,59 +246,6 @@ update msg model =
             , Cmd.none
             )
 
-        SetLoops str ->
-            ( { model
-                | objects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | loops = Maybe.withDefault 0 <| String.toInt str })
-                        model.objects
-              }
-            , Cmd.none
-            )
-
-        SetX str ->
-            ( { model
-                | objects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | x = Maybe.withDefault 0 <| String.toFloat str })
-                        model.objects
-              }
-            , Cmd.none
-            )
-
-        SetY str ->
-            ( { model
-                | objects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | y = Maybe.withDefault 0 <| String.toFloat str })
-                        model.objects
-              }
-            , Cmd.none
-            )
-
-        -- SetWidth str ->
-        --     ( { model
-        --         | objects =
-        --             updateObject
-        --                 model.selectedObjectId
-        --                 (\x -> { x | width = Maybe.withDefault 0 <| String.toInt str })
-        --                 model.objects
-        --       }
-        --     , Cmd.none
-        --     )
-        -- SetHeight str ->
-        --     ( { model
-        --         | objects =
-        --             updateObject
-        --                 model.selectedObjectId
-        --                 (\x -> { x | height = Maybe.withDefault 0 <| String.toInt str })
-        --                 model.objects
-        --       }
-        --     , Cmd.none
-        --     )
         SetXShift transformation ->
             ( { model
                 | objects =
@@ -276,28 +274,6 @@ update msg model =
                     updateObject
                         model.selectedObjectId
                         (\x -> { x | scale = transformation })
-                        model.objects
-              }
-            , Cmd.none
-            )
-
-        SetAnchorX str ->
-            ( { model
-                | objects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | anchorX = Maybe.withDefault 0 <| String.toFloat str })
-                        model.objects
-              }
-            , Cmd.none
-            )
-
-        SetAnchorY str ->
-            ( { model
-                | objects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | anchorY = Maybe.withDefault 0 <| String.toFloat str })
                         model.objects
               }
             , Cmd.none
@@ -363,6 +339,13 @@ update msg model =
             ( model, Cmd.none )
 
 
+
+-- msgOn : String -> Json.Decoder msg -> Html.Attribute msg
+-- msgOn event =
+--     (\msg -> { message = msg, stopPropagation = True, preventDefault = True })
+--         >> Html.Events.custom event
+
+
 download : String -> String -> Cmd msg
 download fileName svg =
     Download.string (String.append fileName ".svg") "image/svg+xml" svg
@@ -387,18 +370,6 @@ nextKey dict =
         |> List.maximum
         |> Maybe.map ((+) 1)
         |> Maybe.withDefault 0
-
-
-updateObject : Maybe Id -> (Object -> Object) -> Dict Int Object -> Dict Int Object
-updateObject maybeId updater objects =
-    case maybeId of
-        Just selectedId ->
-            Dict.update selectedId
-                (Maybe.map updater)
-                objects
-
-        Nothing ->
-            objects
 
 
 moveDraggable : Model -> Coords -> Id -> Model
@@ -450,65 +421,53 @@ view model =
             , Html.Attributes.style "flex-direction" "column"
             , Html.Attributes.style "padding-left" "24px"
             ]
-            [ Html.h3 [] [ Html.text "Shape Attributes" ]
+            [ dragThing
+            , Html.h3 [] [ Html.text "Shape Attributes" ]
             , controlContainer "Shadow Repititions" <|
                 withSelectedObject model emptyHtml <|
-                    numberInput
-                        { label = "Number"
-                        , getValue = .loops >> toFloat
-                        , forAttribute = Loops
+                    numberInputNew
+                        { label = "Loops"
+                        , draggableId = "loops"
+                        , lens = Object.loopFloorLens
                         }
             , controlContainer "Position" <|
                 Html.div []
                     [ withSelectedObject model emptyHtml <|
-                        numberInput
+                        numberInputNew
                             { label = "X"
-                            , getValue = .x
-                            , forAttribute = X
+                            , draggableId = "x"
+                            , lens = Object.xLens
                             }
                     , withSelectedObject model emptyHtml <|
-                        numberInput
+                        numberInputNew
                             { label = "Y"
-                            , getValue = .y
-                            , forAttribute = Y
+                            , draggableId = "y"
+                            , lens = Object.yLens
                             }
                     ]
             , Html.h3 [] [ Html.text "Loop Transformations" ]
             , controlContainer "Rotation" <|
                 Html.div []
                     [ withSelectedObject model emptyHtml <|
-                        numberInput
+                        numberInputNew
                             { label = "AnchorX"
-                            , getValue = .anchorX
-                            , forAttribute = AnchorX
+                            , draggableId = "anchor-x"
+                            , lens = Object.anchorXLens
                             }
                     , withSelectedObject model emptyHtml <|
-                        numberInput
+                        numberInputNew
                             { label = "AnchorY"
-                            , getValue = .anchorY
-                            , forAttribute = AnchorY
+                            , draggableId = "anchor-y"
+                            , lens = Object.anchorYLens
                             }
-                    , viewTransformation model .rotation SetRotation
+                    , viewTransformation model Object.rotationLens .rotation SetRotation
                     ]
             , controlContainer "X-Shift" <|
-                viewTransformation model .xShift SetXShift
+                viewTransformation model Object.xShiftLens .xShift SetXShift
             , controlContainer "Y-Shift" <|
-                viewTransformation model .yShift SetYShift
+                viewTransformation model Object.yShiftLens .yShift SetYShift
             , controlContainer "Scale" <|
-                viewTransformation model .scale SetScale
-
-            -- , viewSlider model
-            --     "Width"
-            --     (String.fromInt << .width)
-            --     SetWidth
-            --     "0"
-            --     "400"
-            -- , viewSlider model
-            --     "Height"
-            --     (String.fromInt << .height)
-            --     SetHeight
-            --     "0"
-            --     "400"
+                viewTransformation model Object.scaleLens .scale SetScale
             , Html.h3 [] [ Html.text "Actions" ]
             , toggle SetGuidesVisible model.guidesVisible "Show Guides"
             , Html.button [ Html.Events.onClick GetSvg ] [ Html.text "download" ]
@@ -566,6 +525,51 @@ numberInput { label, getValue, forAttribute } object =
         ]
 
 
+type alias NumberInputConfigNew =
+    { label : String
+    , draggableId : String
+    , lens : Lens Object Float
+    }
+
+
+dragThing : Html Msg
+dragThing =
+    Html.div
+        [ Pointer.onMove <| AttributeSlide Move Object.loopFloorLens
+        , Pointer.onUp <| AttributeSlide Stop Object.loopFloorLens
+        , downEvent <| Json.Decode.map (AttributeSlide Start Object.loopFloorLens) Pointer.eventDecoder
+        ]
+        [ Html.text "Click me" ]
+
+
+downEvent : Json.Decode.Decoder Msg -> Html.Attribute Msg
+downEvent thing =
+    Html.Events.custom "pointerdown" <|
+        Json.Decode.map
+            (\msg -> { message = msg, stopPropagation = True, preventDefault = True })
+            thing
+
+
+numberInputNew : NumberInputConfigNew -> Object -> Html Msg
+numberInputNew { label, draggableId, lens } object =
+    Html.div []
+        [ Html.label
+            [ Html.Attributes.style "cursor" "ew-resize"
+            , Html.Attributes.style "user-select" "none"
+            , Pointer.onMove <| AttributeSlide Move lens
+            , Pointer.onUp <| AttributeSlide Stop lens
+            , downEvent <| Json.Decode.map (AttributeSlide Start lens) Pointer.eventDecoder
+            ]
+            [ Html.text <| label ++ ":"
+            , Html.input
+                [ Html.Attributes.value <| String.fromFloat <| .get lens object
+                , Html.Attributes.type_ "number"
+                ]
+                []
+            ]
+        ]
+
+
 controlContainer : String -> Html Msg -> Html Msg
 controlContainer name control =
     Html.div
@@ -581,18 +585,18 @@ controlContainer name control =
         ]
 
 
-viewTransformation : Model -> (Object -> Transformation) -> (Transformation -> Msg) -> Html Msg
-viewTransformation model acc transformationMsg =
+viewTransformation : Model -> Lens Object Transformation -> (Object -> Transformation) -> (Transformation -> Msg) -> Html Msg
+viewTransformation model lens acc transformationMsg =
     case getSelectedObject model of
         Just o ->
-            transformationView (acc o) transformationMsg
+            transformationView (acc o) lens transformationMsg o
 
         Nothing ->
             Html.text ""
 
 
-transformationView : Transformation -> (Transformation -> Msg) -> Html Msg
-transformationView transformation transformationMsg =
+transformationView : Transformation -> Lens Object Transformation -> (Transformation -> Msg) -> Object -> Html Msg
+transformationView transformation lens transformationMsg object =
     let
         renderRadioOptions =
             Html.div []
@@ -624,91 +628,46 @@ transformationView transformation transformationMsg =
                 , Html.label [] [ Html.text "Random" ]
                 ]
 
-        linearMsg =
-            String.toFloat
-                >> Maybe.withDefault 0
-                >> Linear
-                >> transformationMsg
-
-        amplitudeInput d =
-            String.toFloat
-                >> Maybe.withDefault 0
-                >> (\a -> Cyclical { d | amplitude = a })
-                >> transformationMsg
-
-        frequencyInput d =
-            String.toFloat
-                >> Maybe.withDefault 0
-                >> (\a -> Cyclical { d | frequency = a })
-                >> transformationMsg
-
-        minInput d =
-            String.toFloat
-                >> Maybe.withDefault 0
-                >> (\a -> Random { d | min = a })
-                >> transformationMsg
-
-        maxInput d =
-            String.toFloat
-                >> Maybe.withDefault 0
-                >> (\a -> Random { d | max = a })
-                >> transformationMsg
-
         renderToggler =
             case transformation of
                 Linear float ->
-                    Html.input
-                        [ Html.Attributes.value (String.fromFloat float)
-                        , Html.Events.onInput linearMsg
-                        ]
-                        []
+                    numberInputNew
+                        { label = "Number"
+                        , draggableId = "linear"
+                        , lens = Lens.compose lens (Transformation.linearLens 0)
+                        }
+                        object
 
                 Cyclical d ->
                     Html.div []
-                        [ Html.div []
-                            [ Html.label []
-                                [ Html.text "Amplitude:"
-                                , Html.input
-                                    [ Html.Attributes.value (String.fromFloat d.amplitude)
-                                    , Html.Events.onInput (amplitudeInput d)
-                                    ]
-                                    []
-                                ]
-                            ]
-                        , Html.div []
-                            [ Html.label []
-                                [ Html.text "Frequency:"
-                                , Html.input
-                                    [ Html.Attributes.value (String.fromFloat d.frequency)
-                                    , Html.Events.onInput (frequencyInput d)
-                                    ]
-                                    []
-                                ]
-                            ]
+                        [ numberInputNew
+                            { label = "Amplitude"
+                            , draggableId = "thing"
+                            , lens = Lens.compose lens (Transformation.amplitudeLens 0)
+                            }
+                            object
+                        , numberInputNew
+                            { label = "Frequency"
+                            , draggableId = "thing2"
+                            , lens = Lens.compose lens (Transformation.frequencyLens 0)
+                            }
+                            object
                         ]
 
                 Random d ->
                     Html.div []
-                        [ Html.div []
-                            [ Html.label []
-                                [ Html.text "Min:"
-                                , Html.input
-                                    [ Html.Attributes.value (String.fromFloat d.min)
-                                    , Html.Events.onInput (minInput d)
-                                    ]
-                                    []
-                                ]
-                            ]
-                        , Html.div []
-                            [ Html.label []
-                                [ Html.text "Max:"
-                                , Html.input
-                                    [ Html.Attributes.value (String.fromFloat d.max)
-                                    , Html.Events.onInput (maxInput d)
-                                    ]
-                                    []
-                                ]
-                            ]
+                        [ numberInputNew
+                            { label = "Min"
+                            , draggableId = "thing"
+                            , lens = Lens.compose lens (Transformation.minLens 0)
+                            }
+                            object
+                        , numberInputNew
+                            { label = "Max"
+                            , draggableId = "thing2"
+                            , lens = Lens.compose lens (Transformation.maxLens 0)
+                            }
+                            object
                         ]
     in
     Html.div
@@ -1085,6 +1044,41 @@ idToType str =
                     Json.Decode.fail "Not a valid Id"
 
 
+
+-- attributeToLens : Attribute -> Lens Object String
+-- attributeToLens attr =
+--     case attr of
+--         Loops ->
+--             Object.loopsLens
+--         X ->
+--             Object.xLens
+--         Y ->
+--             Object.yLens
+--         AnchorX ->
+--             Object.anchorXLens
+--         AnchorY ->
+--             Object.anchorYLens
+
+
+attributeToLabel : Attribute -> String
+attributeToLabel attr =
+    case attr of
+        Loops ->
+            "Loops"
+
+        X ->
+            "X"
+
+        Y ->
+            "Y"
+
+        AnchorX ->
+            "Anchor X"
+
+        AnchorY ->
+            "Anchor Y"
+
+
 attributeToId : Attribute -> String
 attributeToId attr =
     case attr of
@@ -1124,25 +1118,6 @@ idToAttribute str =
 
         other ->
             Err <| other ++ " is not a thing"
-
-
-attributeUpdater : Attribute -> Float -> Object -> Object
-attributeUpdater attr value obj =
-    case attr of
-        Loops ->
-            { obj | loops = floor value }
-
-        X ->
-            { obj | x = toFloat canvasWidth / 2 + value }
-
-        Y ->
-            { obj | y = toFloat canvasHeight / 2 + value }
-
-        AnchorX ->
-            { obj | anchorX = toFloat canvasWidth / 2 + value }
-
-        AnchorY ->
-            { obj | anchorY = toFloat canvasHeight / 2 + value }
 
 
 eventDecoder : Json.Decode.Decoder DragEvent

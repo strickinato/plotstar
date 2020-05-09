@@ -27,6 +27,10 @@
                 app.ports.gotSvg.send(node.innerHTML);
             });
 
+            app.ports.capture.subscribe(function(pointerId) {
+                event.target.setPointerCapture(pointerId)
+            })
+
             setupDraggable(app.ports.dragEvents.send);
 
         </script>
