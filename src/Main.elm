@@ -426,7 +426,6 @@ view model =
                 withSelectedObject model emptyHtml <|
                     numberInputNew
                         { label = "Loops"
-                        , draggableId = "loops"
                         , lens = Object.loopFloorLens
                         }
             , controlContainer "Position" <|
@@ -434,13 +433,11 @@ view model =
                     [ withSelectedObject model emptyHtml <|
                         numberInputNew
                             { label = "X"
-                            , draggableId = "x"
                             , lens = Object.xLens
                             }
                     , withSelectedObject model emptyHtml <|
                         numberInputNew
                             { label = "Y"
-                            , draggableId = "y"
                             , lens = Object.yLens
                             }
                     ]
@@ -450,13 +447,11 @@ view model =
                     [ withSelectedObject model emptyHtml <|
                         numberInputNew
                             { label = "AnchorX"
-                            , draggableId = "anchor-x"
                             , lens = Object.anchorXLens
                             }
                     , withSelectedObject model emptyHtml <|
                         numberInputNew
                             { label = "AnchorY"
-                            , draggableId = "anchor-y"
                             , lens = Object.anchorYLens
                             }
                     , viewTransformation model Object.rotationLens .rotation SetRotation
@@ -499,38 +494,6 @@ withSelectedObject model default fn =
             default
 
 
-type alias NumberInputConfig =
-    { label : String
-    , getValue : Object -> Float
-    , forAttribute : Attribute
-    }
-
-
-numberInput : NumberInputConfig -> Object -> Html Msg
-numberInput { label, getValue, forAttribute } object =
-    Html.div []
-        [ Html.label
-            [ Html.Attributes.style "cursor" "ew-resize"
-            , Html.Attributes.style "user-select" "none"
-            , attribute "data-beacon" <| attributeToId forAttribute
-            ]
-            [ Html.text <| label ++ ":"
-            , Html.input
-                [ Html.Attributes.value <| String.fromFloat (getValue object)
-                , Html.Attributes.type_ "number"
-                ]
-                []
-            ]
-        ]
-
-
-type alias NumberInputConfigNew =
-    { label : String
-    , draggableId : String
-    , lens : Lens Object Float
-    }
-
-
 downEvent : Json.Decode.Decoder Msg -> Html.Attribute Msg
 downEvent thing =
     Html.Events.custom "pointerdown" <|
@@ -539,8 +502,14 @@ downEvent thing =
             thing
 
 
+type alias NumberInputConfigNew =
+    { label : String
+    , lens : Lens Object Float
+    }
+
+
 numberInputNew : NumberInputConfigNew -> Object -> Html Msg
-numberInputNew { label, draggableId, lens } object =
+numberInputNew { label, lens } object =
     Html.div []
         [ Html.label
             [ Html.Attributes.style "cursor" "ew-resize"
@@ -622,7 +591,6 @@ transformationView transformation lens transformationMsg object =
                 Linear float ->
                     numberInputNew
                         { label = "Number"
-                        , draggableId = "linear"
                         , lens = Lens.compose lens (Transformation.linearLens 0)
                         }
                         object
@@ -631,13 +599,11 @@ transformationView transformation lens transformationMsg object =
                     Html.div []
                         [ numberInputNew
                             { label = "Amplitude"
-                            , draggableId = "thing"
                             , lens = Lens.compose lens (Transformation.amplitudeLens 0)
                             }
                             object
                         , numberInputNew
                             { label = "Frequency"
-                            , draggableId = "thing2"
                             , lens = Lens.compose lens (Transformation.frequencyLens 0)
                             }
                             object
@@ -647,13 +613,11 @@ transformationView transformation lens transformationMsg object =
                     Html.div []
                         [ numberInputNew
                             { label = "Min"
-                            , draggableId = "thing"
                             , lens = Lens.compose lens (Transformation.minLens 0)
                             }
                             object
                         , numberInputNew
                             { label = "Max"
-                            , draggableId = "thing2"
                             , lens = Lens.compose lens (Transformation.maxLens 0)
                             }
                             object
@@ -1047,44 +1011,6 @@ idToType str =
 --             Object.anchorXLens
 --         AnchorY ->
 --             Object.anchorYLens
-
-
-attributeToLabel : Attribute -> String
-attributeToLabel attr =
-    case attr of
-        Loops ->
-            "Loops"
-
-        X ->
-            "X"
-
-        Y ->
-            "Y"
-
-        AnchorX ->
-            "Anchor X"
-
-        AnchorY ->
-            "Anchor Y"
-
-
-attributeToId : Attribute -> String
-attributeToId attr =
-    case attr of
-        Loops ->
-            "loops"
-
-        X ->
-            "x"
-
-        Y ->
-            "y"
-
-        AnchorX ->
-            "anchor-x"
-
-        AnchorY ->
-            "anchor-y"
 
 
 idToAttribute : String -> Result String DraggableType
