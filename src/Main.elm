@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes exposing (attribute, style)
 import Html.Events
 import Html.Events.Extra.Pointer as Pointer
+import Html.Events.Extra.Wheel as Wheel
 import Json.Decode
 import Json.Encode
 import LensHelpers
@@ -55,6 +56,7 @@ type Msg
     | SetScale Transformation
     | SetRotation Transformation
     | AttributeSlide DragEvent (Lens Object Float) Pointer.Event
+    | AttributeWheel (Lens Object Float) Wheel.Event
     | SetWithLens (Lens Object Float) Float
     | Center
     | Delete
@@ -204,6 +206,17 @@ update msg model =
 
                 Stop ->
                     ( { model | currentUpdating = ( Nothing, 0 ) }, Cmd.none )
+
+        AttributeWheel lens wheelEvent ->
+            ( { model
+                | objects =
+                    objectsUpdaterNew model.selectedObjectId
+                        lens
+                        ((+) wheelEvent.deltaY)
+                        model.objects
+              }
+            , Cmd.none
+            )
 
         SetWithLens lens val ->
             ( { model
@@ -585,6 +598,7 @@ numberInputNew { label, lens } object =
         , Pointer.onMove <| AttributeSlide Move lens
         , Pointer.onUp <| AttributeSlide Stop lens
         , downEvent
+        , Wheel.onWheel <| AttributeWheel lens
         ]
         [ Html.div [] [ Html.text <| label ++ ":" ]
         , Html.div [ Html.Attributes.class "pr-4" ]
