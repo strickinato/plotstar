@@ -421,8 +421,7 @@ view model =
             , Html.Attributes.style "flex-direction" "column"
             , Html.Attributes.style "padding-left" "24px"
             ]
-            [ dragThing
-            , Html.h3 [] [ Html.text "Shape Attributes" ]
+            [ Html.h3 [] [ Html.text "Shape Attributes" ]
             , controlContainer "Shadow Repititions" <|
                 withSelectedObject model emptyHtml <|
                     numberInputNew
@@ -530,16 +529,6 @@ type alias NumberInputConfigNew =
     , draggableId : String
     , lens : Lens Object Float
     }
-
-
-dragThing : Html Msg
-dragThing =
-    Html.div
-        [ Pointer.onMove <| AttributeSlide Move Object.loopFloorLens
-        , Pointer.onUp <| AttributeSlide Stop Object.loopFloorLens
-        , downEvent <| Json.Decode.map (AttributeSlide Start Object.loopFloorLens) Pointer.eventDecoder
-        ]
-        [ Html.text "Click me" ]
 
 
 downEvent : Json.Decode.Decoder Msg -> Html.Attribute Msg
