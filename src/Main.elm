@@ -560,14 +560,6 @@ withSelectedObject model default fn =
             default
 
 
-downEvent : Json.Decode.Decoder Msg -> Html.Attribute Msg
-downEvent thing =
-    Html.Events.custom "pointerdown" <|
-        Json.Decode.map
-            (\msg -> { message = msg, stopPropagation = True, preventDefault = True })
-            thing
-
-
 type alias NumberInputConfigNew =
     { label : String
     , lens : Lens Object Float
@@ -580,17 +572,24 @@ numberInputNew { label, lens } object =
         inputMsg str =
             SetWithLens lens
                 (Maybe.withDefault (.get lens object) (String.toFloat str))
+
+        downEvent =
+            Html.Events.custom "pointerdown" <|
+                Json.Decode.map
+                    (\msg -> { message = msg, stopPropagation = True, preventDefault = False })
+                    (Json.Decode.map (AttributeSlide Start lens) Pointer.eventDecoder)
     in
     Html.label
-        [ Html.Attributes.class "flex justify-between pr-4 cursor-ew"
+        [ Html.Attributes.style "user-select" "none"
+        , Html.Attributes.class "flex justify-between pr-4 cursor-ew"
         , Pointer.onMove <| AttributeSlide Move lens
         , Pointer.onUp <| AttributeSlide Stop lens
-        , downEvent <| Json.Decode.map (AttributeSlide Start lens) Pointer.eventDecoder
+        , downEvent
         ]
         [ Html.div [] [ Html.text <| label ++ ":" ]
         , Html.div [ Html.Attributes.class "pr-4" ]
             [ Html.input
-                [ Html.Attributes.class "border border-grey w-12 text-right cursor-ew"
+                [ Html.Attributes.class "border border-grey hover:border-black w-12 text-right cursor-ew"
                 , Html.Attributes.value <| String.fromFloat <| .get lens object
                 , Html.Attributes.type_ "number"
                 , Html.Events.onInput inputMsg
