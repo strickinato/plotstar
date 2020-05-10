@@ -1212,6 +1212,15 @@ viewSlider model label accessor msg min max =
             Html.span [] []
 
 
+loopToColor : Bool -> Int -> String
+loopToColor showGuides loop =
+    if showGuides && loop == 1 then
+        "red"
+
+    else
+        "black"
+
+
 viewObjects : Model -> Svg Msg
 viewObjects model =
     Dict.toList model.objects
@@ -1221,22 +1230,18 @@ viewObjects model =
 
 viewObject : Model -> ( Int, Object ) -> Svg Msg
 viewObject model ( id, object ) =
-    let
-        shadows =
-            List.range 1 (object.loops - 1)
-                |> List.map (viewShadow object)
-    in
-    (renderMain model ( id, object ) :: shadows)
+    List.range 1 object.loops
+        |> List.map (viewShadow model.guidesVisible object)
         |> Svg.g []
 
 
-viewShadow : Object -> Int -> Svg Msg
-viewShadow object loop =
+viewShadow : Bool -> Object -> Int -> Svg Msg
+viewShadow showGuides object loop =
     case object.shape of
         Square squareData ->
             Svg.rect
                 [ fill "none"
-                , stroke "black"
+                , stroke <| loopToColor showGuides loop
                 , transform <| calculatedRotation loop object
                 , x (String.fromFloat <| calculatedX loop object)
                 , y (String.fromFloat <| calculatedY loop object)
@@ -1248,7 +1253,7 @@ viewShadow object loop =
         Circle circleData ->
             Svg.circle
                 [ fill "none"
-                , stroke "black"
+                , stroke <| loopToColor showGuides loop
                 , transform <| calculatedRotation loop object
                 , cx (String.fromFloat <| calculatedX loop object)
                 , cy (String.fromFloat <| calculatedY loop object)
