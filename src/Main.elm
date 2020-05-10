@@ -36,6 +36,7 @@ port capture : Int -> Cmd msg
 
 type alias Model =
     { objects : Dict Id Object
+    , history : List Snapshot
     , selectedObjectId : Maybe Id
     , currentDraggable : Maybe DraggableIdentifier -- TODO get rid of this style of draggable
     , guidesVisible : Bool
@@ -60,9 +61,9 @@ type Msg
     | SetWithLens (Lens Object Float) Float
     | Center
     | Delete
+    | Undo Int
     | SelectObject (Maybe Id)
-    | AddSquare
-    | AddCircle -- Todo generalize
+    | AddNewShape Shape
     | SetGuidesVisible Bool
     | NoOp
 
@@ -83,6 +84,18 @@ type alias DraggableIdentifier =
     { id : DraggableType
     , dragStart : Coords
     }
+
+
+type alias Snapshot =
+    { action : Action
+    , objectsState : Dict Id Object
+    }
+
+
+type Action
+    = Initial
+    | AddShape Shape
+    | DeleteObject Object
 
 
 type DragEvent
@@ -113,17 +126,26 @@ subscriptions _ =
         ]
 
 
+initialSnapshot : Snapshot
+initialSnapshot =
+    let
+        initialObjects =
+            Dict.fromList
+                [ ( 0
+                  , Object.initWithShape
+                        canvasWidth
+                        canvasHeight
+                        Shape.defaultSquare
+                  )
+                ]
+    in
+    { action = Initial, objectsState = initialObjects }
+
+
 init : Model
 init =
-    { objects =
-        Dict.fromList
-            [ ( 0
-              , Object.initWithShape
-                    canvasWidth
-                    canvasHeight
-                    Shape.defaultSquare
-              )
-            ]
+    { history = [ initialSnapshot ]
+    , objects = initialSnapshot.objectsState
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
     , guidesVisible = True
@@ -225,6 +247,29 @@ update msg model =
                         lens
                         (always val)
                         model.objects
+              }
+            , Cmd.none
+            )
+
+        Undo int ->
+            let
+                droppedHistory =
+                    List.drop int model.history
+
+                ( restoredObjects, newHistory ) =
+                    case droppedHistory of
+                        [] ->
+                            ( initialSnapshot.objectsState, [ initialSnapshot ] )
+
+                        [ head ] ->
+                            ( head.objectsState, [ initialSnapshot ] )
+
+                        head :: tail ->
+                            ( head.objectsState, tail )
+            in
+            ( { model
+                | objects = restoredObjects
+                , history = newHistory
               }
             , Cmd.none
             )
@@ -333,41 +378,52 @@ update msg model =
 
         Delete ->
             let
-                newObjects =
+                ( removedObject, newObjects ) =
                     case model.selectedObjectId of
-                        Just id ->
-                            Dict.remove id model.objects
+                        Just selectedId ->
+                            case Dict.get selectedId model.objects of
+                                Just obj ->
+                                    ( Just obj, Dict.remove selectedId model.objects )
+
+                                Nothing ->
+                                    ( Nothing, model.objects )
 
                         Nothing ->
-                            model.objects
+                            ( Nothing, model.objects )
+
+                newModel =
+                    case removedObject of
+                        Just removed ->
+                            { model
+                                | selectedObjectId = getAnyId newObjects
+                                , objects = newObjects
+                                , history =
+                                    { action = DeleteObject removed
+                                    , objectsState = newObjects
+                                    }
+                                        :: model.history
+                            }
+
+                        Nothing ->
+                            model
             in
-            ( { model
-                | selectedObjectId = Nothing
-                , objects = newObjects
-              }
-            , Cmd.none
-            )
+            ( newModel, Cmd.none )
 
         SelectObject maybeObjectId ->
             ( { model | selectedObjectId = maybeObjectId }
             , Cmd.none
             )
 
-        AddSquare ->
+        AddNewShape newShape ->
             let
                 ( newSelectedId, newObjects ) =
-                    insertShape Shape.defaultSquare model.objects
+                    insertShape newShape model.objects
             in
-            ( { model | objects = newObjects, selectedObjectId = Just newSelectedId }
-            , Cmd.none
-            )
-
-        AddCircle ->
-            let
-                ( newSelectedId, newObjects ) =
-                    insertShape Shape.defaultCircle model.objects
-            in
-            ( { model | objects = newObjects, selectedObjectId = Just newSelectedId }
+            ( { model
+                | objects = newObjects
+                , history = { action = AddShape newShape, objectsState = newObjects } :: model.history
+                , selectedObjectId = Just newSelectedId
+              }
             , Cmd.none
             )
 
@@ -378,6 +434,13 @@ update msg model =
 
         NoOp ->
             ( model, Cmd.none )
+
+
+getAnyId : Dict comparable b -> Maybe comparable
+getAnyId dict =
+    dict
+        |> Dict.keys
+        |> List.head
 
 
 download : String -> String -> Cmd msg
@@ -507,8 +570,8 @@ view model =
                 [ controlSection "Shapes"
                 , viewObjectSelector model
                 , controlRow <|
-                    [ button Secondary AddSquare "+ Square"
-                    , button Secondary AddCircle "+ Circle"
+                    [ button Secondary (AddNewShape Shape.defaultSquare) "+ Square"
+                    , button Secondary (AddNewShape Shape.defaultCircle) "+ Circle"
                     ]
                 , case model.selectedObjectId of
                     Just _ ->
@@ -517,8 +580,65 @@ view model =
                     Nothing ->
                         Html.text ""
                 ]
+            , controlContainer <|
+                [ controlSection "History"
+                , button Secondary (Undo 0) "Undo"
+                , viewHistory model.history
+                ]
             ]
         ]
+
+
+viewHistory : List Snapshot -> Html Msg
+viewHistory history =
+    history
+        |> List.map toItem
+        |> itemList
+
+
+toItem : Snapshot -> Item
+toItem snapshot =
+    Item (actionLabel snapshot.action) Undo False
+
+
+type alias Item =
+    { text : String
+    , clickHandler : Int -> Msg
+    , highlighted : Bool
+    }
+
+
+itemList : List Item -> Html Msg
+itemList items =
+    let
+        itemClassList highlighted =
+            [ ( "border-b pl-2 hover:bg-black hover:text-white cursor-pointer", True )
+            , ( "bg-purple-200", highlighted )
+            ]
+    in
+    Html.ul [ Html.Attributes.class "border max-h-sm overflow-scroll" ] <|
+        List.indexedMap
+            (\int item ->
+                Html.li
+                    [ Html.Attributes.classList (itemClassList item.highlighted)
+                    , Html.Events.onClick (item.clickHandler int)
+                    ]
+                    [ Html.text <| item.text ]
+            )
+            items
+
+
+actionLabel : Action -> String
+actionLabel action =
+    case action of
+        Initial ->
+            "Initial"
+
+        AddShape s ->
+            "Added shape"
+
+        DeleteObject o ->
+            "Deleted shape"
 
 
 type Level
@@ -830,20 +950,30 @@ viewAnchorPoint model =
 
 viewObjectSelector : Model -> Html Msg
 viewObjectSelector model =
+    let
+        asItem ( id, obj ) =
+            { text = objectLabel obj ++ " " ++ String.fromInt id
+            , clickHandler = always (SelectObject (Just id))
+            , highlighted = isSelected model id
+            }
+    in
     Dict.toList model.objects
-        |> List.map
-            (\( id, obj ) ->
-                Html.li
-                    [ Html.Events.onClick (SelectObject (Just id))
-                    , if isSelected model id then
-                        Html.Attributes.style "color" "red"
+        |> List.map asItem
+        |> itemList
 
-                      else
-                        Html.Attributes.style "color" "black"
-                    ]
-                    [ Html.text <| objectLabel obj ++ " " ++ String.fromInt id ]
-            )
-        |> Html.ul []
+
+
+--     (\( id, obj ) ->
+--         Html.li
+--             [ Html.Events.onClick (SelectObject (Just id))
+--             , if isSelected model id then
+--                 Html.Attributes.style "color" "red"
+--               else
+--                 Html.Attributes.style "color" "black"
+--             ]
+--             [ Html.text <| objectLabel obj ++ " " ++ String.fromInt id ]
+--     )
+-- |> Html.ul []
 
 
 objectLabel : Object -> String

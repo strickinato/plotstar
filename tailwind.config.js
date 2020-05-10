@@ -5,6 +5,9 @@ module.exports = {
       'ew': 'ew-resize',
       'pointer': 'pointer'
     },
+    maxHeight: {
+      sm: '150px'
+    },
     extend: {},
   },
   variants: {},
