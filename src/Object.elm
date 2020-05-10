@@ -28,7 +28,16 @@ type alias Object =
 loopFloorLens : Lens Object Float
 loopFloorLens =
     { get = toFloat << .loops
-    , set = \flt obj -> { obj | loops = floor flt }
+    , set =
+        \flt obj ->
+            { obj
+                | loops =
+                    if flt > 0 then
+                        floor flt
+
+                    else
+                        0
+            }
     }
 
 
