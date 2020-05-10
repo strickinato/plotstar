@@ -545,21 +545,25 @@ view model =
         [ Html.Attributes.id "main"
         , Html.Attributes.class "flex p-4 h-full"
         ]
-        [ Html.div
-            [ Html.Attributes.class "border border-black border-4"
-            , Html.Attributes.id svgId
-            , Html.Attributes.style "width" (String.fromInt canvasWidth ++ "px")
-            , Html.Attributes.style "height" (String.fromInt canvasHeight ++ "px")
-            ]
-            [ Svg.svg
-                [ Html.Attributes.style "width" (String.fromInt canvasWidth ++ "px")
+        [ Html.div []
+            [ Html.div
+                [ Html.Attributes.class "border-black border-4"
+                , Html.Attributes.id svgId
+                , Html.Attributes.style "width" (String.fromInt canvasWidth ++ "px")
                 , Html.Attributes.style "height" (String.fromInt canvasHeight ++ "px")
-                , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
                 ]
-                [ viewCenterPoint model.guidesVisible
-                , viewAnchorPoint model
-                , viewObjects model
+                [ Svg.svg
+                    [ Html.Attributes.style "width" (String.fromInt canvasWidth ++ "px")
+                    , Html.Attributes.style "height" (String.fromInt canvasHeight ++ "px")
+                    , Html.Attributes.attribute "xmlns" "http://www.w3.org/2000/svg"
+                    ]
+                    [ viewCenterPoint model.guidesVisible
+                    , viewAnchorPoint model
+                    , viewObjects model
+                    ]
                 ]
+            , Html.div [ Html.Attributes.class "pt-4" ]
+                [ Html.h1 [ Html.Attributes.class "border-t-4 inline-block" ] [ Html.text "Plotter Otter" ] ]
             ]
         , Html.div
             [ Html.Attributes.class "flex-col space-y-4 pl-4 h-full w-1/5 overflow-scroll" ]
