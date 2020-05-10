@@ -639,12 +639,12 @@ view model =
                 [ controlSection "Shape Attributes"
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
-                        numberInputNew
+                        numberInput
                             { label = "X"
                             , lens = Object.xLens
                             }
                     , withSelectedObject model emptyHtml <|
-                        numberInputNew
+                        numberInput
                             { label = "Y"
                             , lens = Object.yLens
                             }
@@ -653,7 +653,7 @@ view model =
                     sizeAttributes
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
-                        numberInputNew
+                        numberInput
                             { label = "Rotate"
                             , lens = Object.baseRotation
                             }
@@ -664,7 +664,7 @@ view model =
                 , controlSection "Transformations"
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
-                        numberInputNew
+                        numberInput
                             { label = "Loops"
                             , lens = Object.loopFloorLens
                             }
@@ -672,12 +672,12 @@ view model =
                 , controlSubSection "Rotation"
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
-                        numberInputNew
+                        numberInput
                             { label = "Anchor X"
                             , lens = Object.anchorXLens
                             }
                     , withSelectedObject model emptyHtml <|
-                        numberInputNew
+                        numberInput
                             { label = "Anchor Y"
                             , lens = Object.anchorYLens
                             }
@@ -883,7 +883,7 @@ withSelectedObject model default fn =
             default
 
 
-type alias NumberInputConfigNew =
+type alias NumberInputConfig =
     { label : String
     , lens : Lens Object Float
     }
@@ -894,7 +894,7 @@ sizeAttributes object =
     case object.shape of
         Circle cd ->
             controlRow <|
-                [ numberInputNew
+                [ numberInput
                     { label = "Radius"
                     , lens = Lens.compose Object.shapeLens (Shape.radiusLens 10)
                     }
@@ -903,12 +903,12 @@ sizeAttributes object =
 
         Square sd ->
             controlRow <|
-                [ numberInputNew
+                [ numberInput
                     { label = "Width"
                     , lens = Lens.compose Object.shapeLens (Shape.widthLens 10)
                     }
                     object
-                , numberInputNew
+                , numberInput
                     { label = "Height"
                     , lens = Lens.compose Object.shapeLens (Shape.heightLens 10)
                     }
@@ -916,8 +916,8 @@ sizeAttributes object =
                 ]
 
 
-numberInputNew : NumberInputConfigNew -> Object -> Html Msg
-numberInputNew { label, lens } object =
+numberInput : NumberInputConfig -> Object -> Html Msg
+numberInput { label, lens } object =
     let
         inputMsg str =
             Maybe.withDefault (.get lens object) (String.toFloat str)
@@ -1043,7 +1043,7 @@ transformationView transformation lens transformationMsg object =
             case transformation of
                 Linear float ->
                     controlRow <|
-                        [ numberInputNew
+                        [ numberInput
                             { label = "Number"
                             , lens = Lens.compose lens (Transformation.linearLens 0)
                             }
@@ -1052,12 +1052,12 @@ transformationView transformation lens transformationMsg object =
 
                 Cyclical d ->
                     controlRow <|
-                        [ numberInputNew
+                        [ numberInput
                             { label = "Amplitude"
                             , lens = Lens.compose lens (Transformation.amplitudeLens 0)
                             }
                             object
-                        , numberInputNew
+                        , numberInput
                             { label = "Frequency"
                             , lens = Lens.compose lens (Transformation.frequencyLens 0)
                             }
@@ -1066,12 +1066,12 @@ transformationView transformation lens transformationMsg object =
 
                 Random d ->
                     controlRow <|
-                        [ numberInputNew
+                        [ numberInput
                             { label = "Min"
                             , lens = Lens.compose lens (Transformation.minLens 0)
                             }
                             object
-                        , numberInputNew
+                        , numberInput
                             { label = "Max"
                             , lens = Lens.compose lens (Transformation.maxLens 0)
                             }
