@@ -58,6 +58,7 @@ type Msg
     | SetScale Transformation
     | SetRotation Transformation
     | SetShape Shape
+    | SetObject String Object
     | AttributeSlide DragEvent String (Lens Object Float) Pointer.Event
     | AttributeWheel (Lens Object Float) Wheel.Event
     | SetWithLens String (Lens Object Float) Float
@@ -101,6 +102,7 @@ type Action
     | ChangeField String
     | ChangeTransformationType Transformation String
     | ChangeShapeType Shape
+    | ChangeObject Object String
 
 
 type DragEvent
@@ -371,6 +373,26 @@ update msg model =
                 , history =
                     appendHistory
                         { action = ChangeShapeType shape
+                        , objectsState = newObjects
+                        }
+                        model.history
+              }
+            , Cmd.none
+            )
+
+        SetObject label object ->
+            let
+                newObjects =
+                    updateObject
+                        model.selectedObjectId
+                        (always object)
+                        model.objects
+            in
+            ( { model
+                | objects = newObjects
+                , history =
+                    appendHistory
+                        { action = ChangeObject object label
                         , objectsState = newObjects
                         }
                         model.history
@@ -655,6 +677,11 @@ view model =
                 , viewTransformation model Object.scaleLens .scale SetScale
                 ]
             , controlContainer <|
+                [ controlSection "History"
+                , button Secondary (Undo 1) "Undo"
+                , viewHistory model.history
+                ]
+            , controlContainer <|
                 [ controlSection "Actions"
                 , toggle SetGuidesVisible model.guidesVisible "Show Guides"
                 , button Primary GetSvg "Download"
@@ -674,12 +701,25 @@ view model =
                         Html.text ""
                 ]
             , controlContainer <|
-                [ controlSection "History"
-                , button Secondary (Undo 1) "Undo"
-                , viewHistory model.history
+                [ controlSection "Examples"
+                , viewExamples
                 ]
             ]
         ]
+
+
+viewExamples : Html Msg
+viewExamples =
+    let
+        asItem ( label, obj ) =
+            { text = label
+            , clickHandler = \i -> SetObject label obj
+            , itemState = Normal
+            }
+    in
+    Object.examples canvasWidth canvasHeight
+        |> List.map asItem
+        |> itemList
 
 
 viewShapeConverters : Object -> Html Msg
@@ -779,6 +819,9 @@ actionLabel action =
                 [ "Switched to "
                 , Shape.label shape
                 ]
+
+        ChangeObject object label ->
+            String.concat [ "Showing ", label, " example" ]
 
 
 type Level

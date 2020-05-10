@@ -5,6 +5,7 @@ import Monocle.Compose as Compose
 import Monocle.Iso exposing (Iso)
 import Monocle.Lens exposing (Lens)
 import Monocle.Prism exposing (Prism)
+import Random
 import Shape exposing (Shape)
 import Transformation exposing (Transformation)
 
@@ -105,4 +106,76 @@ initWithShape canvasWidth canvasHeight shape =
     , rotation = Transformation.default
     , shape = shape
     , scale = Transformation.default
+    }
+
+
+examples : Int -> Int -> List ( String, Object )
+examples w h =
+    [ ( "Napkin", napkin w h )
+    , ( "Scorpion Tail", scorpion w h )
+    , ( "Spots", spots w h )
+    ]
+
+
+napkin : Int -> Int -> Object
+napkin canvasWidth canvasHeight =
+    { x = toFloat canvasWidth / 2
+    , y = toFloat canvasHeight / 2
+    , anchorX = toFloat canvasWidth / 2
+    , anchorY = toFloat canvasHeight / 2
+    , xShift = Transformation.default
+    , yShift = Transformation.default
+    , loops = 130
+    , rotation =
+        Transformation.Cyclical
+            { amplitude = 38, frequency = 24 }
+    , shape = Shape.Square { width = 10, height = 10 }
+    , scale = Transformation.Linear 6
+    }
+
+
+scorpion : Int -> Int -> Object
+scorpion canvasWidth canvasHeight =
+    { x = 213
+    , y = 198
+    , anchorX = 927
+    , anchorY = 710
+    , xShift = Transformation.Linear 8
+    , yShift = Transformation.Linear 8
+    , loops = 122
+    , rotation = Transformation.Linear 1
+    , shape = Shape.Circle { radius = 25 }
+    , scale =
+        Transformation.Cyclical
+            { amplitude = 93, frequency = 7 }
+    }
+
+
+spots : Int -> Int -> Object
+spots canvasWidth canvasHeight =
+    { x = toFloat canvasWidth / 2
+    , y = toFloat canvasHeight / 2
+    , anchorX = toFloat canvasWidth / 2
+    , anchorY = toFloat canvasHeight / 2
+    , xShift =
+        Transformation.Random
+            { min = 0 - (toFloat canvasWidth / 2)
+            , max = toFloat canvasWidth / 2
+            , seed = Random.initialSeed 0
+            }
+    , yShift =
+        Transformation.Random
+            { min = 0 - (toFloat canvasHeight / 2)
+            , max = toFloat canvasHeight / 2
+            , seed = Random.initialSeed 0
+            }
+    , loops = 300
+    , rotation = Transformation.Linear 0
+    , shape = Shape.Circle { radius = 25 }
+    , scale =
+        Transformation.Random
+            { min = -100
+            , max = 100
+            , seed = Random.initialSeed 0
+            }
     }
