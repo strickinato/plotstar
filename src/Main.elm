@@ -433,7 +433,7 @@ view : Model -> Html Msg
 view model =
     Html.div
         [ Html.Attributes.id "main"
-        , Html.Attributes.class "flex p-4"
+        , Html.Attributes.class "flex p-4 h-full"
         ]
         [ Html.div
             [ Html.Attributes.class "border border-black border-4"
@@ -452,7 +452,7 @@ view model =
                 ]
             ]
         , Html.div
-            [ Html.Attributes.class "flex-col space-y-4 pl-4" ]
+            [ Html.Attributes.class "flex-col space-y-4 pl-4 h-full overflow-scroll" ]
             [ controlContainer <|
                 [ controlSection "Shape Attributes"
                 , controlRow <|
