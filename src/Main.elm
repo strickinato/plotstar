@@ -16,6 +16,7 @@ import Monocle.Compose as Compose
 import Monocle.Lens as Lens exposing (Lens)
 import Object exposing (Object)
 import Random
+import SelectList exposing (SelectList)
 import Shape exposing (Shape(..))
 import Svg exposing (Svg)
 import Svg.Attributes exposing (cx, cy, fill, height, points, r, stroke, transform, viewBox, width, x, y)
@@ -36,7 +37,7 @@ port capture : Int -> Cmd msg
 
 type alias Model =
     { objects : Dict Id Object
-    , history : List Snapshot
+    , history : SelectList Snapshot
     , selectedObjectId : Maybe Id
     , currentDraggable : Maybe DraggableIdentifier -- TODO get rid of this style of draggable
     , guidesVisible : Bool
@@ -146,7 +147,7 @@ initialSnapshot =
 
 init : Model
 init =
-    { history = [ initialSnapshot ]
+    { history = SelectList.singleton initialSnapshot
     , objects = initialSnapshot.objectsState
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
@@ -238,7 +239,10 @@ update msg model =
                 Stop ->
                     ( { model
                         | currentUpdating = ( Nothing, 0 )
-                        , history = { action = ChangeField label, objectsState = model.objects } :: model.history
+                        , history =
+                            appendHistory
+                                { action = ChangeField label, objectsState = model.objects }
+                                model.history
                       }
                     , Cmd.none
                     )
@@ -264,30 +268,23 @@ update msg model =
             in
             ( { model
                 | objects = newObjects
-                , history = { action = ChangeField label, objectsState = newObjects } :: model.history
+                , history =
+                    appendHistory
+                        { action = ChangeField label, objectsState = newObjects }
+                        model.history
               }
             , Cmd.none
             )
 
         Undo int ->
             let
-                droppedHistory =
-                    List.drop int model.history
-
-                ( restoredObjects, newHistory ) =
-                    case droppedHistory of
-                        [] ->
-                            ( initialSnapshot.objectsState, [ initialSnapshot ] )
-
-                        [ head ] ->
-                            ( head.objectsState, [ initialSnapshot ] )
-
-                        head :: tail ->
-                            ( head.objectsState, tail )
+                movedHistory =
+                    SelectList.selectBy int model.history
+                        |> Maybe.withDefault model.history
             in
             ( { model
-                | objects = restoredObjects
-                , history = newHistory
+                | objects = .objectsState (SelectList.selected movedHistory)
+                , history = movedHistory
               }
             , Cmd.none
             )
@@ -350,11 +347,12 @@ update msg model =
             ( { model
                 | objects = newObjects
                 , history =
-                    { action =
-                        ChangeTransformationType transformation "Rotation"
-                    , objectsState = newObjects
-                    }
-                        :: model.history
+                    appendHistory
+                        { action =
+                            ChangeTransformationType transformation "Rotation"
+                        , objectsState = newObjects
+                        }
+                        model.history
               }
             , Cmd.none
             )
@@ -370,11 +368,12 @@ update msg model =
             ( { model
                 | objects = newObjects
                 , history =
-                    { action =
-                        ChangeTransformationType transformation "X Shift"
-                    , objectsState = newObjects
-                    }
-                        :: model.history
+                    appendHistory
+                        { action =
+                            ChangeTransformationType transformation "X Shift"
+                        , objectsState = newObjects
+                        }
+                        model.history
               }
             , Cmd.none
             )
@@ -390,11 +389,12 @@ update msg model =
             ( { model
                 | objects = newObjects
                 , history =
-                    { action =
-                        ChangeTransformationType transformation "Y Shift"
-                    , objectsState = newObjects
-                    }
-                        :: model.history
+                    appendHistory
+                        { action =
+                            ChangeTransformationType transformation "Y Shift"
+                        , objectsState = newObjects
+                        }
+                        model.history
               }
             , Cmd.none
             )
@@ -410,11 +410,12 @@ update msg model =
             ( { model
                 | objects = newObjects
                 , history =
-                    { action =
-                        ChangeTransformationType transformation "Scale"
-                    , objectsState = newObjects
-                    }
-                        :: model.history
+                    SelectList.insertAfter
+                        { action =
+                            ChangeTransformationType transformation "Scale"
+                        , objectsState = newObjects
+                        }
+                        model.history
               }
             , Cmd.none
             )
@@ -452,10 +453,11 @@ update msg model =
                                 | selectedObjectId = getAnyId newObjects
                                 , objects = newObjects
                                 , history =
-                                    { action = DeleteObject removed
-                                    , objectsState = newObjects
-                                    }
-                                        :: model.history
+                                    appendHistory
+                                        { action = DeleteObject removed
+                                        , objectsState = newObjects
+                                        }
+                                        model.history
                             }
 
                         Nothing ->
@@ -475,7 +477,10 @@ update msg model =
             in
             ( { model
                 | objects = newObjects
-                , history = { action = AddShape newShape, objectsState = newObjects } :: model.history
+                , history =
+                    appendHistory
+                        { action = AddShape newShape, objectsState = newObjects }
+                        model.history
                 , selectedObjectId = Just newSelectedId
               }
             , Cmd.none
@@ -488,6 +493,13 @@ update msg model =
 
         NoOp ->
             ( model, Cmd.none )
+
+
+appendHistory : Snapshot -> SelectList Snapshot -> SelectList Snapshot
+appendHistory newSnapshot history =
+    history
+        |> SelectList.updateBefore (always [])
+        |> SelectList.insertAfter newSnapshot
 
 
 getAnyId : Dict comparable b -> Maybe comparable
@@ -640,45 +652,65 @@ view model =
                 ]
             , controlContainer <|
                 [ controlSection "History"
-                , button Secondary (Undo 0) "Undo"
+                , button Secondary (Undo 1) "Undo"
                 , viewHistory model.history
                 ]
             ]
         ]
 
 
-viewHistory : List Snapshot -> Html Msg
+viewHistory : SelectList Snapshot -> Html Msg
 viewHistory history =
     history
-        |> List.map toItem
+        |> SelectList.map (toItem (SelectList.index history))
+        |> SelectList.updateSelected (\a -> { a | itemState = Highlighted })
+        |> SelectList.updateBefore (\before -> List.map (\a -> { a | itemState = Faded }) before)
+        |> SelectList.toList
         |> itemList
 
 
-toItem : Snapshot -> Item
-toItem snapshot =
-    Item (actionLabel snapshot.action) Undo False
+toItem : Int -> Snapshot -> Item
+toItem selectedIndex snapshot =
+    { text = actionLabel snapshot.action
+    , clickHandler = \i -> Undo (i - selectedIndex)
+    , itemState = Normal
+    }
 
 
 type alias Item =
     { text : String
     , clickHandler : Int -> Msg
-    , highlighted : Bool
+    , itemState : ItemState
     }
+
+
+type ItemState
+    = Normal
+    | Highlighted
+    | Faded
 
 
 itemList : List Item -> Html Msg
 itemList items =
     let
-        itemClassList highlighted =
+        itemClassList itemState =
             [ ( "border-b pl-2 hover:bg-black hover:text-white cursor-pointer", True )
-            , ( "bg-purple-200", highlighted )
+            , case itemState of
+                Highlighted ->
+                    ( "bg-purple-200", True )
+
+                Faded ->
+                    ( "bg-orange-200", True )
+
+                _ ->
+                    ( "", False )
             ]
     in
     Html.ul [ Html.Attributes.class "border max-h-sm overflow-scroll" ] <|
         List.indexedMap
             (\int item ->
                 Html.li
-                    [ Html.Attributes.classList (itemClassList item.highlighted)
+                    [ Html.Attributes.classList (itemClassList item.itemState)
                     , Html.Events.onClick (item.clickHandler int)
                     ]
                     [ Html.text <| item.text ]
@@ -1023,7 +1055,12 @@ viewObjectSelector model =
         asItem ( id, obj ) =
             { text = objectLabel obj ++ " " ++ String.fromInt id
             , clickHandler = always (SelectObject (Just id))
-            , highlighted = isSelected model id
+            , itemState =
+                if isSelected model id then
+                    Highlighted
+
+                else
+                    Normal
             }
     in
     Dict.toList model.objects
