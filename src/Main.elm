@@ -452,7 +452,7 @@ view model =
                 ]
             ]
         , Html.div
-            [ Html.Attributes.class "flex-col space-y-4 pl-4 h-full overflow-scroll" ]
+            [ Html.Attributes.class "flex-col space-y-4 pl-4 h-full w-1/5 overflow-scroll" ]
             [ controlContainer <|
                 [ controlSection "Shape Attributes"
                 , controlRow <|
