@@ -207,12 +207,19 @@ update msg model =
                             case model.currentUpdating of
                                 ( Just firstValue, lastValue ) ->
                                     let
-                                        modifier f =
-                                            if (offset - lastValue) > 0 then
-                                                f + 1
+                                        modNumber =
+                                            if pointerEvent.pointer.keys.shift then
+                                                10
 
                                             else
-                                                f - 1
+                                                1
+
+                                        modifier f =
+                                            if (offset - lastValue) > 0 then
+                                                f + modNumber
+
+                                            else
+                                                f - modNumber
                                     in
                                     { model
                                         | objects =
