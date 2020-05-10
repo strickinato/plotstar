@@ -15,6 +15,7 @@ type alias Object =
     , y : Float
     , anchorX : Float
     , anchorY : Float
+    , baseRotation : Float
     , loops : Int
     , xShift : Transformation
     , yShift : Transformation
@@ -42,6 +43,13 @@ yLens : Lens Object Float
 yLens =
     { get = .y
     , set = \flt obj -> { obj | y = flt }
+    }
+
+
+baseRotation : Lens Object Float
+baseRotation =
+    { get = .baseRotation
+    , set = \flt obj -> { obj | baseRotation = flt }
     }
 
 
@@ -100,6 +108,7 @@ initWithShape canvasWidth canvasHeight shape =
     , y = toFloat canvasHeight / 2
     , anchorX = toFloat canvasWidth / 2
     , anchorY = toFloat canvasHeight / 2
+    , baseRotation = 0
     , xShift = Transformation.default
     , yShift = Transformation.default
     , loops = 1
@@ -123,6 +132,7 @@ napkin canvasWidth canvasHeight =
     , y = toFloat canvasHeight / 2
     , anchorX = toFloat canvasWidth / 2
     , anchorY = toFloat canvasHeight / 2
+    , baseRotation = 0
     , xShift = Transformation.default
     , yShift = Transformation.default
     , loops = 130
@@ -140,6 +150,7 @@ scorpion canvasWidth canvasHeight =
     , y = 198
     , anchorX = 927
     , anchorY = 710
+    , baseRotation = 0
     , xShift = Transformation.Linear 8
     , yShift = Transformation.Linear 8
     , loops = 122
@@ -157,6 +168,7 @@ spots canvasWidth canvasHeight =
     , y = toFloat canvasHeight / 2
     , anchorX = toFloat canvasWidth / 2
     , anchorY = toFloat canvasHeight / 2
+    , baseRotation = 0
     , xShift =
         Transformation.Random
             { min = 0 - (toFloat canvasWidth / 2)

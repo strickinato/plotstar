@@ -651,8 +651,15 @@ view model =
                     ]
                 , withSelectedObject model emptyHtml <|
                     sizeAttributes
-                , withSelectedObject model emptyHtml <|
-                    viewShapeConverters
+                , controlRow <|
+                    [ withSelectedObject model emptyHtml <|
+                        numberInputNew
+                            { label = "Rotate"
+                            , lens = Object.baseRotation
+                            }
+                    , withSelectedObject model emptyHtml <|
+                        viewShapeConverters
+                    ]
                 , toggle SetGuidesVisible model.guidesVisible "Show Guides"
                 , controlSection "Transformations"
                 , controlRow <|
@@ -1339,7 +1346,10 @@ calculatedRotation : Int -> Object -> String
 calculatedRotation loop object =
     String.concat
         [ "rotate("
-        , String.fromFloat <| transformationByLoop loop object.rotation
+        , object.rotation
+            |> transformationByLoop loop
+            |> (+) object.baseRotation
+            |> String.fromFloat
         , ","
         , String.fromFloat object.anchorX
         , ","
