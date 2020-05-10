@@ -126,3 +126,16 @@ type alias CycleData =
 
 type alias RandomData =
     { min : Float, max : Float, seed : Random.Seed }
+
+
+label : Transformation -> String
+label transformation =
+    case transformation of
+        Linear _ ->
+            "Linear"
+
+        Cyclical _ ->
+            "Cyclical"
+
+        Random _ ->
+            "Random"

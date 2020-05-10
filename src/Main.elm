@@ -56,9 +56,9 @@ type Msg
     | SetYShift Transformation
     | SetScale Transformation
     | SetRotation Transformation
-    | AttributeSlide DragEvent (Lens Object Float) Pointer.Event
+    | AttributeSlide DragEvent String (Lens Object Float) Pointer.Event
     | AttributeWheel (Lens Object Float) Wheel.Event
-    | SetWithLens (Lens Object Float) Float
+    | SetWithLens String (Lens Object Float) Float
     | Center
     | Delete
     | Undo Int
@@ -96,6 +96,8 @@ type Action
     = Initial
     | AddShape Shape
     | DeleteObject Object
+    | ChangeField String
+    | ChangeTransformationType Transformation String
 
 
 type DragEvent
@@ -188,7 +190,7 @@ objectsUpdaterNew maybeId lens modifier objects =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        AttributeSlide eventType lens pointerEvent ->
+        AttributeSlide eventType label lens pointerEvent ->
             let
                 offset =
                     Tuple.first pointerEvent.pointer.offsetPos
@@ -227,7 +229,12 @@ update msg model =
                     ( updated, Cmd.none )
 
                 Stop ->
-                    ( { model | currentUpdating = ( Nothing, 0 ) }, Cmd.none )
+                    ( { model
+                        | currentUpdating = ( Nothing, 0 )
+                        , history = { action = ChangeField label, objectsState = model.objects } :: model.history
+                      }
+                    , Cmd.none
+                    )
 
         AttributeWheel lens wheelEvent ->
             ( { model
@@ -240,13 +247,17 @@ update msg model =
             , Cmd.none
             )
 
-        SetWithLens lens val ->
-            ( { model
-                | objects =
+        SetWithLens label lens val ->
+            let
+                newObjects =
                     objectsUpdaterNew model.selectedObjectId
                         lens
                         (always val)
                         model.objects
+            in
+            ( { model
+                | objects = newObjects
+                , history = { action = ChangeField label, objectsState = newObjects } :: model.history
               }
             , Cmd.none
             )
@@ -322,45 +333,81 @@ update msg model =
             ( model, download "your-svg" output )
 
         SetRotation transformation ->
-            ( { model
-                | objects =
+            let
+                newObjects =
                     updateObject
                         model.selectedObjectId
                         (\x -> { x | rotation = transformation })
                         model.objects
+            in
+            ( { model
+                | objects = newObjects
+                , history =
+                    { action =
+                        ChangeTransformationType transformation "Rotation"
+                    , objectsState = newObjects
+                    }
+                        :: model.history
               }
             , Cmd.none
             )
 
         SetXShift transformation ->
-            ( { model
-                | objects =
+            let
+                newObjects =
                     updateObject
                         model.selectedObjectId
                         (\x -> { x | xShift = transformation })
                         model.objects
+            in
+            ( { model
+                | objects = newObjects
+                , history =
+                    { action =
+                        ChangeTransformationType transformation "X Shift"
+                    , objectsState = newObjects
+                    }
+                        :: model.history
               }
             , Cmd.none
             )
 
         SetYShift transformation ->
-            ( { model
-                | objects =
+            let
+                newObjects =
                     updateObject
                         model.selectedObjectId
                         (\x -> { x | yShift = transformation })
                         model.objects
+            in
+            ( { model
+                | objects = newObjects
+                , history =
+                    { action =
+                        ChangeTransformationType transformation "Y Shift"
+                    , objectsState = newObjects
+                    }
+                        :: model.history
               }
             , Cmd.none
             )
 
         SetScale transformation ->
-            ( { model
-                | objects =
+            let
+                newObjects =
                     updateObject
                         model.selectedObjectId
                         (\x -> { x | scale = transformation })
                         model.objects
+            in
+            ( { model
+                | objects = newObjects
+                , history =
+                    { action =
+                        ChangeTransformationType transformation "Scale"
+                    , objectsState = newObjects
+                    }
+                        :: model.history
               }
             , Cmd.none
             )
@@ -544,12 +591,12 @@ view model =
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
                         numberInputNew
-                            { label = "AnchorX"
+                            { label = "Anchor X"
                             , lens = Object.anchorXLens
                             }
                     , withSelectedObject model emptyHtml <|
                         numberInputNew
-                            { label = "AnchorY"
+                            { label = "Anchor Y"
                             , lens = Object.anchorYLens
                             }
                     ]
@@ -640,6 +687,17 @@ actionLabel action =
         DeleteObject o ->
             "Deleted shape"
 
+        ChangeField s ->
+            "Updated" ++ " " ++ s
+
+        ChangeTransformationType t label ->
+            String.concat
+                [ "Switched "
+                , label
+                , " to "
+                , Transformation.label t
+                ]
+
 
 type Level
     = Primary
@@ -727,20 +785,20 @@ numberInputNew : NumberInputConfigNew -> Object -> Html Msg
 numberInputNew { label, lens } object =
     let
         inputMsg str =
-            SetWithLens lens
-                (Maybe.withDefault (.get lens object) (String.toFloat str))
+            Maybe.withDefault (.get lens object) (String.toFloat str)
+                |> SetWithLens label lens
 
         downEvent =
             Html.Events.custom "pointerdown" <|
                 Json.Decode.map
                     (\msg -> { message = msg, stopPropagation = True, preventDefault = False })
-                    (Json.Decode.map (AttributeSlide Start lens) Pointer.eventDecoder)
+                    (Json.Decode.map (AttributeSlide Start label lens) Pointer.eventDecoder)
     in
     Html.label
         [ Html.Attributes.style "user-select" "none"
         , Html.Attributes.class "flex justify-between pr-4 cursor-ew"
-        , Pointer.onMove <| AttributeSlide Move lens
-        , Pointer.onUp <| AttributeSlide Stop lens
+        , Pointer.onMove <| AttributeSlide Move label lens
+        , Pointer.onUp <| AttributeSlide Stop label lens
         , downEvent
         , Wheel.onWheel <| AttributeWheel lens
         ]
