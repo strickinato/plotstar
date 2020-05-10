@@ -57,6 +57,7 @@ type Msg
     | SetYShift Transformation
     | SetScale Transformation
     | SetRotation Transformation
+    | SetShape Shape
     | AttributeSlide DragEvent String (Lens Object Float) Pointer.Event
     | AttributeWheel (Lens Object Float) Wheel.Event
     | SetWithLens String (Lens Object Float) Float
@@ -99,6 +100,7 @@ type Action
     | DeleteObject Object
     | ChangeField String
     | ChangeTransformationType Transformation String
+    | ChangeShapeType Shape
 
 
 type DragEvent
@@ -348,8 +350,27 @@ update msg model =
                 | objects = newObjects
                 , history =
                     appendHistory
-                        { action =
-                            ChangeTransformationType transformation "Rotation"
+                        { action = ChangeTransformationType transformation "Rotation"
+                        , objectsState = newObjects
+                        }
+                        model.history
+              }
+            , Cmd.none
+            )
+
+        SetShape shape ->
+            let
+                newObjects =
+                    updateObject
+                        model.selectedObjectId
+                        (\x -> { x | shape = shape })
+                        model.objects
+            in
+            ( { model
+                | objects = newObjects
+                , history =
+                    appendHistory
+                        { action = ChangeShapeType shape
                         , objectsState = newObjects
                         }
                         model.history
@@ -602,6 +623,8 @@ view model =
                     ]
                 , withSelectedObject model emptyHtml <|
                     sizeAttributes
+                , withSelectedObject model emptyHtml <|
+                    viewShapeConverters
                 , controlSection "Transformations"
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
@@ -657,6 +680,16 @@ view model =
                 ]
             ]
         ]
+
+
+viewShapeConverters : Object -> Html Msg
+viewShapeConverters object =
+    case object.shape of
+        Square _ ->
+            button Secondary (SetShape <| Shape.toCircle object.shape) "⚫️"
+
+        Circle _ ->
+            button Secondary (SetShape <| Shape.toSquare object.shape) "⬛️"
 
 
 viewHistory : SelectList Snapshot -> Html Msg
@@ -739,6 +772,12 @@ actionLabel action =
                 , label
                 , " to "
                 , Transformation.label t
+                ]
+
+        ChangeShapeType shape ->
+            String.concat
+                [ "Switched to "
+                , Shape.label shape
                 ]
 
 

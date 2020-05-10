@@ -19,6 +19,39 @@ type alias CircleData =
     }
 
 
+toSquare : Shape -> Shape
+toSquare shape =
+    case shape of
+        Square _ ->
+            shape
+
+        Circle circleData ->
+            Square
+                { height = 2 * circleData.radius
+                , width = 2 * circleData.radius
+                }
+
+
+toCircle : Shape -> Shape
+toCircle shape =
+    case shape of
+        Square squareData ->
+            Circle { radius = (squareData.height + squareData.width) / 4 }
+
+        Circle _ ->
+            shape
+
+
+label : Shape -> String
+label shape =
+    case shape of
+        Square _ ->
+            "Square"
+
+        Circle _ ->
+            "Circle"
+
+
 radiusLens : Float -> Lens Shape Float
 radiusLens defaultValue =
     { get =
