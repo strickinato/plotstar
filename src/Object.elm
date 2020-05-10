@@ -183,13 +183,13 @@ spots canvasWidth canvasHeight =
         Transformation.Random
             { min = 0 - (toFloat canvasWidth / 2)
             , max = toFloat canvasWidth / 2
-            , seed = Random.initialSeed 0
+            , seed = 0
             }
     , yShift =
         Transformation.Random
             { min = 0 - (toFloat canvasHeight / 2)
             , max = toFloat canvasHeight / 2
-            , seed = Random.initialSeed 0
+            , seed = 0
             }
     , loops = 300
     , rotation = Transformation.Linear 0
@@ -198,7 +198,7 @@ spots canvasWidth canvasHeight =
         Transformation.Random
             { min = -100
             , max = 100
-            , seed = Random.initialSeed 0
+            , seed = 0
             }
     }
 

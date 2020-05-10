@@ -120,12 +120,33 @@ maxLens defaultValue =
     }
 
 
+randLens : Float -> Lens Transformation Float
+randLens defaultValue =
+    { get =
+        \t ->
+            case t of
+                Random d ->
+                    d.seed
+
+                _ ->
+                    defaultValue
+    , set =
+        \f t ->
+            case t of
+                Random d ->
+                    Random { d | seed = f }
+
+                _ ->
+                    t
+    }
+
+
 type alias CycleData =
     { amplitude : Float, frequency : Float }
 
 
 type alias RandomData =
-    { min : Float, max : Float, seed : Random.Seed }
+    { min : Float, max : Float, seed : Float }
 
 
 label : Transformation -> String

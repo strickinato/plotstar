@@ -1036,22 +1036,23 @@ transformationView transformation lens transformationMsg object =
                 (transformationMsg (Cyclical { amplitude = 1, frequency = 1 }))
             , TabOption "Random"
                 (transformationEq "Random")
-                (transformationMsg (Random { min = 0, max = 100, seed = Random.initialSeed 0 }))
+                (transformationMsg (Random { min = 0, max = 100, seed = 0 }))
             ]
 
         renderToggler =
             case transformation of
                 Linear float ->
-                    controlRow <|
+                    [ controlRow <|
                         [ numberInput
                             { label = "Number"
                             , lens = Lens.compose lens (Transformation.linearLens 0)
                             }
                             object
                         ]
+                    ]
 
                 Cyclical d ->
-                    controlRow <|
+                    [ controlRow <|
                         [ numberInput
                             { label = "Amplitude"
                             , lens = Lens.compose lens (Transformation.amplitudeLens 0)
@@ -1063,9 +1064,10 @@ transformationView transformation lens transformationMsg object =
                             }
                             object
                         ]
+                    ]
 
                 Random d ->
-                    controlRow <|
+                    [ controlRow <|
                         [ numberInput
                             { label = "Min"
                             , lens = Lens.compose lens (Transformation.minLens 0)
@@ -1077,13 +1079,19 @@ transformationView transformation lens transformationMsg object =
                             }
                             object
                         ]
+                    , controlRow <|
+                        [ numberInput
+                            { label = "Rand"
+                            , lens = Lens.compose lens (Transformation.randLens 0)
+                            }
+                            object
+                        ]
+                    ]
     in
-    Html.div
-        []
+    Html.div []
         [ tabbed tabOptions
         , Html.div [ Html.Attributes.class "border-l border-r border-b p-2" ]
-            [ renderToggler
-            ]
+            renderToggler
         ]
 
 
@@ -1287,13 +1295,13 @@ transformationByLoop loop transformation =
                     Random.float data.min data.max
 
                 generated =
-                    Random.step generator (Random.initialSeed <| floor (toFloat loop * data.min * data.max))
+                    Random.step generator (Random.initialSeed <| floor (data.seed * data.min * data.max))
 
                 fn : Int -> ( Float, Random.Seed ) -> ( Float, Random.Seed )
                 fn _ ( _, newSeed ) =
                     Random.step generator newSeed
             in
-            List.range 1 loop
+            List.range 0 loop
                 |> List.foldl fn generated
                 |> Tuple.first
 
