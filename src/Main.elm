@@ -1295,7 +1295,7 @@ transformationByLoop loop transformation =
                     Random.float data.min data.max
 
                 generated =
-                    Random.step generator (Random.initialSeed <| floor (data.seed * data.min * data.max))
+                    Random.step generator (Random.initialSeed <| floor data.seed)
 
                 fn : Int -> ( Float, Random.Seed ) -> ( Float, Random.Seed )
                 fn _ ( _, newSeed ) =
