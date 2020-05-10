@@ -624,8 +624,14 @@ view model =
                     , viewObjects model
                     ]
                 ]
-            , Html.div [ Html.Attributes.class "pt-4" ]
-                [ Html.h1 [ Html.Attributes.class "border-t-4 inline-block" ] [ Html.text "Plotter Otter" ] ]
+            , Html.div [ Html.Attributes.class "flex pt-4 pr-4 justify-between" ]
+                [ Html.h1 [ Html.Attributes.class "border-t-4 inline-block" ]
+                    [ Html.text "Plotter Otter" ]
+                , Html.div [ Html.Attributes.class "flex" ]
+                    [ Html.div [ Html.Attributes.class "pr-4" ] [ button Secondary (Undo 1) "Undo" ]
+                    , Html.div [ Html.Attributes.class "" ] [ button Primary GetSvg "Download" ]
+                    ]
+                ]
             ]
         , Html.div
             [ Html.Attributes.class "flex-col space-y-4 pl-4 h-full w-1/5 overflow-scroll" ]
@@ -647,6 +653,7 @@ view model =
                     sizeAttributes
                 , withSelectedObject model emptyHtml <|
                     viewShapeConverters
+                , toggle SetGuidesVisible model.guidesVisible "Show Guides"
                 , controlSection "Transformations"
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
@@ -678,20 +685,14 @@ view model =
                 ]
             , controlContainer <|
                 [ controlSection "History"
-                , button Secondary (Undo 1) "Undo"
                 , viewHistory model.history
-                ]
-            , controlContainer <|
-                [ controlSection "Actions"
-                , toggle SetGuidesVisible model.guidesVisible "Show Guides"
-                , button Primary GetSvg "Download"
                 ]
             , controlContainer <|
                 [ controlSection "Shapes"
                 , viewObjectSelector model
                 , controlRow <|
-                    [ button Secondary (AddNewShape Shape.defaultSquare) "+ Square"
-                    , button Secondary (AddNewShape Shape.defaultCircle) "+ Circle"
+                    [ button Secondary (AddNewShape Shape.defaultSquare) "+ ⬛️"
+                    , button Secondary (AddNewShape Shape.defaultCircle) "+ ⚫️"
                     ]
                 , case model.selectedObjectId of
                     Just _ ->
@@ -1392,7 +1393,9 @@ toggle msg value text =
                 , Html.Events.onCheck msg
                 ]
                 []
-            , Html.text text
+            , Html.span
+                [ Html.Attributes.class "pl-2 cursor-pointer" ]
+                [ Html.text text ]
             ]
         ]
 
