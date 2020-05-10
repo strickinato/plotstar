@@ -748,6 +748,8 @@ viewHistory history =
         |> SelectList.updateBefore (\before -> List.map (\a -> { a | itemState = Faded }) before)
         |> SelectList.toList
         |> itemList
+        |> List.singleton
+        |> Html.div [ Html.Attributes.style "height" "150px" ]
 
 
 toItem : Int -> Snapshot -> Item

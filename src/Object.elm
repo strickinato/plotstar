@@ -120,7 +120,8 @@ initWithShape canvasWidth canvasHeight shape =
 
 examples : Int -> Int -> List ( String, Object )
 examples w h =
-    [ ( "Napkin", napkin w h )
+    [ ( "Bow Tie", bowTie w h )
+    , ( "Napkin", napkin w h )
     , ( "Scorpion Tail", scorpion w h )
     , ( "Spots", spots w h )
     ]
@@ -190,4 +191,20 @@ spots canvasWidth canvasHeight =
             , max = 100
             , seed = Random.initialSeed 0
             }
+    }
+
+
+bowTie : Int -> Int -> Object
+bowTie canvasWidth canvasHeight =
+    { x = toFloat canvasWidth / 2
+    , y = toFloat canvasHeight / 2
+    , anchorX = toFloat canvasWidth / 2
+    , anchorY = toFloat canvasHeight / 2
+    , baseRotation = -20
+    , xShift = Transformation.Linear 0
+    , yShift = Transformation.Linear 0
+    , loops = 42
+    , rotation = Transformation.Linear 1
+    , shape = Shape.Square { width = 900, height = 25 }
+    , scale = Transformation.Linear 0
     }
