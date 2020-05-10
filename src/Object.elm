@@ -86,6 +86,13 @@ rotationLens =
     }
 
 
+shapeLens : Lens Object Shape
+shapeLens =
+    { get = .shape
+    , set = \shape obj -> { obj | shape = shape }
+    }
+
+
 initWithShape : Int -> Int -> Shape -> Object
 initWithShape canvasWidth canvasHeight shape =
     { x = toFloat canvasWidth / 2

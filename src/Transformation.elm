@@ -1,7 +1,6 @@
 module Transformation exposing (..)
 
 import Monocle.Lens exposing (Lens)
-import Monocle.Optional exposing (Optional)
 import Random
 
 

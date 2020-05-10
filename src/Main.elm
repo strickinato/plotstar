@@ -121,7 +121,7 @@ init =
               , Object.initWithShape
                     canvasWidth
                     canvasHeight
-                    Shape.defaultCircle
+                    Shape.defaultSquare
               )
             ]
     , selectedObjectId = Just 0
@@ -380,13 +380,6 @@ update msg model =
             ( model, Cmd.none )
 
 
-
--- msgOn : String -> Json.Decoder msg -> Html.Attribute msg
--- msgOn event =
---     (\msg -> { message = msg, stopPropagation = True, preventDefault = True })
---         >> Html.Events.custom event
-
-
 download : String -> String -> Cmd msg
 download fileName svg =
     Download.string (String.append fileName ".svg") "image/svg+xml" svg
@@ -479,6 +472,8 @@ view model =
                             , lens = Object.yLens
                             }
                     ]
+                , withSelectedObject model emptyHtml <|
+                    sizeAttributes
                 , controlSection "Transformations"
                 , controlSubSection "Rotation"
                 , controlRow <|
@@ -577,6 +572,33 @@ type alias NumberInputConfigNew =
     { label : String
     , lens : Lens Object Float
     }
+
+
+sizeAttributes : Object -> Html Msg
+sizeAttributes object =
+    case object.shape of
+        Circle cd ->
+            controlRow <|
+                [ numberInputNew
+                    { label = "Radius"
+                    , lens = Lens.compose Object.shapeLens (Shape.radiusLens 10)
+                    }
+                    object
+                ]
+
+        Square sd ->
+            controlRow <|
+                [ numberInputNew
+                    { label = "Width"
+                    , lens = Lens.compose Object.shapeLens (Shape.widthLens 10)
+                    }
+                    object
+                , numberInputNew
+                    { label = "Height"
+                    , lens = Lens.compose Object.shapeLens (Shape.heightLens 10)
+                    }
+                    object
+                ]
 
 
 numberInputNew : NumberInputConfigNew -> Object -> Html Msg
