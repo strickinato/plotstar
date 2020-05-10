@@ -521,13 +521,6 @@ view model =
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
                         numberInputNew
-                            { label = "Loops"
-                            , lens = Object.loopFloorLens
-                            }
-                    ]
-                , controlRow <|
-                    [ withSelectedObject model emptyHtml <|
-                        numberInputNew
                             { label = "X"
                             , lens = Object.xLens
                             }
@@ -540,6 +533,13 @@ view model =
                 , withSelectedObject model emptyHtml <|
                     sizeAttributes
                 , controlSection "Transformations"
+                , controlRow <|
+                    [ withSelectedObject model emptyHtml <|
+                        numberInputNew
+                            { label = "Loops"
+                            , lens = Object.loopFloorLens
+                            }
+                    ]
                 , controlSubSection "Rotation"
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
@@ -779,7 +779,7 @@ controlSection name =
 
 controlSubSection : String -> Html Msg
 controlSubSection name =
-    Html.h4 [] [ Html.text name ]
+    Html.h4 [ Html.Attributes.class "pt-4" ] [ Html.text name ]
 
 
 viewTransformation : Model -> Lens Object Transformation -> (Object -> Transformation) -> (Transformation -> Msg) -> Html Msg
