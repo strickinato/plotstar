@@ -436,8 +436,10 @@ view model =
         , Html.Attributes.class "flex p-4"
         ]
         [ Html.div
-            [ Html.Attributes.style "border" "2px solid black"
+            [ Html.Attributes.class "border border-black border-4"
             , Html.Attributes.id svgId
+            , Html.Attributes.style "width" (String.fromInt canvasWidth ++ "px")
+            , Html.Attributes.style "height" (String.fromInt canvasHeight ++ "px")
             ]
             [ Svg.svg
                 [ Html.Attributes.style "width" (String.fromInt canvasWidth ++ "px")
