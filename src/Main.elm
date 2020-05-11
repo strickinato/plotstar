@@ -1,7 +1,10 @@
 port module Main exposing (main)
 
+import Base64
 import Browser
+import Browser.Navigation exposing (Key)
 import Dict exposing (Dict)
+import Dict.Extra
 import File.Download as Download
 import Html exposing (Html)
 import Html.Attributes exposing (attribute, style)
@@ -16,11 +19,13 @@ import Monocle.Compose as Compose
 import Monocle.Lens as Lens exposing (Lens)
 import Object exposing (Object)
 import Random
+import Result.Extra
 import SelectList exposing (SelectList)
 import Shape exposing (Shape(..))
 import Svg exposing (Svg)
 import Svg.Attributes exposing (cx, cy, fill, height, points, r, stroke, transform, viewBox, width, x, y)
 import Transformation exposing (Transformation(..))
+import Url exposing (Url)
 
 
 port dragEvents : (Json.Decode.Value -> msg) -> Sub msg
@@ -42,6 +47,7 @@ type alias Model =
     , currentDraggable : Maybe DraggableIdentifier -- TODO get rid of this style of draggable
     , guidesVisible : Bool
     , currentUpdating : ( Maybe Float, Float ) -- Starting Offset
+    , navigationKey : Key
     }
 
 
@@ -51,6 +57,7 @@ type alias Id =
 
 type Msg
     = Drag DragMsg
+    | UrlChanged Url
     | GetSvg
     | GotSvg String
     | SetXShift Transformation
@@ -117,11 +124,13 @@ type alias Coords =
 
 main : Program () Model Msg
 main =
-    Browser.document
-        { init = \_ -> ( init, Cmd.none )
+    Browser.application
+        { init = \_ url key -> ( init key url, Cmd.none )
         , view = \m -> { title = "Plotter Otter", body = [ view m ] }
         , update = update
         , subscriptions = subscriptions
+        , onUrlRequest = always NoOp
+        , onUrlChange = UrlChanged
         }
 
 
@@ -149,14 +158,30 @@ initialSnapshot =
     { action = Initial, objectsState = initialObjects }
 
 
-init : Model
-init =
+objectsFromUrl : Url -> Dict Id Object -> Dict Id Object
+objectsFromUrl url default =
+    case url.fragment of
+        Just base64Fragment ->
+            base64Fragment
+                |> Base64.decode
+                |> Result.map (Json.Decode.decodeString decodeObjects)
+                |> Result.map (Result.mapError (always "Couldn't decode from URL"))
+                |> Result.Extra.join
+                |> Result.withDefault default
+
+        Nothing ->
+            default
+
+
+init : Key -> Url -> Model
+init key url =
     { history = SelectList.singleton initialSnapshot
-    , objects = initialSnapshot.objectsState
+    , objects = objectsFromUrl url initialSnapshot.objectsState
     , selectedObjectId = Just 0
     , currentDraggable = Nothing
     , guidesVisible = True
     , currentUpdating = ( Nothing, 0 )
+    , navigationKey = key
     }
 
 
@@ -248,7 +273,7 @@ update msg model =
                                 { action = ChangeField label, objectsState = model.objects }
                                 model.history
                       }
-                    , Cmd.none
+                    , saveToUrl model.navigationKey model.objects
                     )
 
         AttributeWheel lens wheelEvent ->
@@ -277,7 +302,7 @@ update msg model =
                         { action = ChangeField label, objectsState = newObjects }
                         model.history
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey model.objects
             )
 
         Undo int ->
@@ -292,6 +317,9 @@ update msg model =
               }
             , Cmd.none
             )
+
+        UrlChanged url ->
+            ( model, Cmd.none )
 
         Drag { event, cursor, draggables } ->
             let
@@ -357,7 +385,7 @@ update msg model =
                         }
                         model.history
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey newObjects
             )
 
         SetShape shape ->
@@ -377,7 +405,7 @@ update msg model =
                         }
                         model.history
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey newObjects
             )
 
         SetObject label object ->
@@ -397,7 +425,7 @@ update msg model =
                         }
                         model.history
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey newObjects
             )
 
         SetXShift transformation ->
@@ -418,7 +446,7 @@ update msg model =
                         }
                         model.history
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey newObjects
             )
 
         SetYShift transformation ->
@@ -439,7 +467,7 @@ update msg model =
                         }
                         model.history
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey newObjects
             )
 
         SetScale transformation ->
@@ -453,14 +481,14 @@ update msg model =
             ( { model
                 | objects = newObjects
                 , history =
-                    SelectList.insertAfter
+                    appendHistory
                         { action =
                             ChangeTransformationType transformation "Scale"
                         , objectsState = newObjects
                         }
                         model.history
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey newObjects
             )
 
         Center ->
@@ -506,7 +534,7 @@ update msg model =
                         Nothing ->
                             model
             in
-            ( newModel, Cmd.none )
+            ( newModel, saveToUrl model.navigationKey newModel.objects )
 
         SelectObject maybeObjectId ->
             ( { model | selectedObjectId = maybeObjectId }
@@ -526,7 +554,7 @@ update msg model =
                         model.history
                 , selectedObjectId = Just newSelectedId
               }
-            , Cmd.none
+            , saveToUrl model.navigationKey newObjects
             )
 
         SetGuidesVisible bool ->
@@ -536,6 +564,16 @@ update msg model =
 
         NoOp ->
             ( model, Cmd.none )
+
+
+saveToUrl : Key -> Dict Id Object -> Cmd Msg
+saveToUrl key objects =
+    objects
+        |> encodeObjects
+        |> Json.Encode.encode 0
+        |> Base64.encode
+        |> String.append "#"
+        |> Browser.Navigation.replaceUrl key
 
 
 appendHistory : Snapshot -> SelectList Snapshot -> SelectList Snapshot
@@ -597,10 +635,6 @@ updateObjectLocation coords maybeObject =
             )
 
 
-
--- View logic
-
-
 view : Model -> Html Msg
 view model =
     Html.div
@@ -630,6 +664,8 @@ view model =
                 , Html.div [ Html.Attributes.class "flex" ]
                     [ Html.div [ Html.Attributes.class "pr-4" ] [ button Secondary (Undo 1) "Undo" ]
                     , Html.div [ Html.Attributes.class "" ] [ button Primary GetSvg "Download" ]
+
+                    -- , Html.text <| Base64.encode (Json.Encode.encode 0 (encodeObjects model.objects))
                     ]
                 ]
             ]
@@ -1576,3 +1612,17 @@ distance coords1 coords2 =
             coords1.y - coords2.y
     in
     sqrt ((dx ^ 2) + (dy ^ 2))
+
+
+decodeObjects : Json.Decode.Decoder (Dict Id Object)
+decodeObjects =
+    Json.Decode.dict Object.decoder
+        |> Json.Decode.map (Dict.Extra.mapKeys (Maybe.withDefault 0 << String.toInt))
+
+
+encodeObjects : Dict Id Object -> Json.Encode.Value
+encodeObjects objectDict =
+    Json.Encode.dict
+        String.fromInt
+        Object.encode
+        objectDict

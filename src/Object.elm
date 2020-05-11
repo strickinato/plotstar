@@ -1,5 +1,8 @@
 module Object exposing (..)
 
+import Json.Decode exposing (Decoder)
+import Json.Decode.Pipeline
+import Json.Encode
 import LensHelpers exposing (..)
 import Monocle.Compose as Compose
 import Monocle.Iso exposing (Iso)
@@ -125,6 +128,39 @@ initWithShape canvasWidth canvasHeight shape =
     , shape = shape
     , scale = Transformation.default
     }
+
+
+decoder : Decoder Object
+decoder =
+    Json.Decode.succeed Object
+        |> Json.Decode.Pipeline.required "x" Json.Decode.float
+        |> Json.Decode.Pipeline.required "y" Json.Decode.float
+        |> Json.Decode.Pipeline.required "anchorX" Json.Decode.float
+        |> Json.Decode.Pipeline.required "anchorY" Json.Decode.float
+        |> Json.Decode.Pipeline.required "baseRotation" Json.Decode.float
+        |> Json.Decode.Pipeline.required "loops" Json.Decode.int
+        |> Json.Decode.Pipeline.required "xShift" Transformation.decoder
+        |> Json.Decode.Pipeline.required "yShift" Transformation.decoder
+        |> Json.Decode.Pipeline.required "scale" Transformation.decoder
+        |> Json.Decode.Pipeline.required "rotation" Transformation.decoder
+        |> Json.Decode.Pipeline.required "shape" Shape.decoder
+
+
+encode : Object -> Json.Encode.Value
+encode record =
+    Json.Encode.object
+        [ ( "x", Json.Encode.float <| record.x )
+        , ( "y", Json.Encode.float <| record.y )
+        , ( "anchorX", Json.Encode.float <| record.anchorX )
+        , ( "anchorY", Json.Encode.float <| record.anchorY )
+        , ( "baseRotation", Json.Encode.float <| record.baseRotation )
+        , ( "loops", Json.Encode.int <| record.loops )
+        , ( "xShift", Transformation.encode <| record.xShift )
+        , ( "yShift", Transformation.encode <| record.yShift )
+        , ( "scale", Transformation.encode <| record.scale )
+        , ( "rotation", Transformation.encode <| record.rotation )
+        , ( "shape", Shape.encode <| record.shape )
+        ]
 
 
 examples : Int -> Int -> List ( String, Object )

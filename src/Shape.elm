@@ -1,5 +1,7 @@
 module Shape exposing (..)
 
+import Json.Decode exposing (Decoder)
+import Json.Encode
 import Monocle.Lens exposing (Lens)
 
 
@@ -123,3 +125,48 @@ defaultSquare =
 defaultCircle : Shape
 defaultCircle =
     Circle { radius = 25 }
+
+
+decoder : Decoder Shape
+decoder =
+    Json.Decode.oneOf
+        [ Json.Decode.map Circle circleDecoder
+        , Json.Decode.map Square squareDecoder
+        ]
+
+
+circleDecoder : Decoder CircleData
+circleDecoder =
+    Json.Decode.map CircleData
+        (Json.Decode.field "radius" Json.Decode.float)
+
+
+squareDecoder : Decoder SquareData
+squareDecoder =
+    Json.Decode.map2 SquareData
+        (Json.Decode.field "height" Json.Decode.float)
+        (Json.Decode.field "width" Json.Decode.float)
+
+
+encode : Shape -> Json.Encode.Value
+encode shape =
+    case shape of
+        Circle circleData ->
+            circleEncoder circleData
+
+        Square squareData ->
+            squareEncoder squareData
+
+
+circleEncoder : CircleData -> Json.Encode.Value
+circleEncoder cd =
+    Json.Encode.object
+        [ ( "radius", Json.Encode.float <| cd.radius ) ]
+
+
+squareEncoder : SquareData -> Json.Encode.Value
+squareEncoder sd =
+    Json.Encode.object
+        [ ( "width", Json.Encode.float <| sd.width )
+        , ( "height", Json.Encode.float <| sd.height )
+        ]

@@ -1,5 +1,7 @@
 module Transformation exposing (..)
 
+import Json.Decode exposing (Decoder)
+import Json.Encode
 import Monocle.Lens exposing (Lens)
 import Random
 
@@ -160,3 +162,62 @@ label transformation =
 
         Random _ ->
             "Random"
+
+
+decoder : Decoder Transformation
+decoder =
+    Json.Decode.oneOf
+        [ Json.Decode.map Linear linearDecoder
+        , Json.Decode.map Cyclical cyclicalDecoder
+        , Json.Decode.map Random randomDecoder
+        ]
+
+
+cyclicalDecoder : Decoder CycleData
+cyclicalDecoder =
+    Json.Decode.map2 CycleData
+        (Json.Decode.field "amplitude" Json.Decode.float)
+        (Json.Decode.field "frequency" Json.Decode.float)
+
+
+randomDecoder : Decoder RandomData
+randomDecoder =
+    Json.Decode.map3 RandomData
+        (Json.Decode.field "min" Json.Decode.float)
+        (Json.Decode.field "max" Json.Decode.float)
+        (Json.Decode.field "seed" Json.Decode.float)
+
+
+linearDecoder : Decoder Float
+linearDecoder =
+    Json.Decode.float
+
+
+encode : Transformation -> Json.Encode.Value
+encode transformation =
+    case Debug.log "Tranny:" transformation of
+        Linear float ->
+            Json.Encode.float float
+
+        Cyclical cycleData ->
+            cyclicalEncoder cycleData
+
+        Random randomData ->
+            randomEncoder randomData
+
+
+cyclicalEncoder : CycleData -> Json.Encode.Value
+cyclicalEncoder cd =
+    Json.Encode.object
+        [ ( "amplitude", Json.Encode.float <| cd.amplitude )
+        , ( "frequency", Json.Encode.float <| cd.frequency )
+        ]
+
+
+randomEncoder : RandomData -> Json.Encode.Value
+randomEncoder rd =
+    Json.Encode.object
+        [ ( "min", Json.Encode.float <| rd.min )
+        , ( "max", Json.Encode.float <| rd.max )
+        , ( "seed", Json.Encode.float <| rd.seed )
+        ]
