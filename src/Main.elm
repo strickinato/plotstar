@@ -18,11 +18,14 @@ import Monocle.Compose as Compose
 import Monocle.Lens as Lens exposing (Lens)
 import Object exposing (Object)
 import ObjectDict exposing (ObjectDict)
+import Process
 import Random
 import SelectList exposing (SelectList)
 import Shape exposing (Shape(..))
 import Svg exposing (Svg)
 import Svg.Attributes exposing (cx, cy, fill, height, points, r, stroke, transform, viewBox, width, x, y)
+import Task
+import Time
 import Transformation exposing (Transformation(..))
 import Url exposing (Url)
 
@@ -33,6 +36,7 @@ type alias Model =
     , selectedObjectId : Maybe ObjectDict.Id
     , guidesVisible : Bool
     , currentUpdating : ( Maybe Float, Float ) -- Starting Offset
+    , wheelState : Dict String Time.Posix
     , navigationKey : Key
     }
 
@@ -51,10 +55,12 @@ type Msg
     = UrlChanged Url
     | GetSvg
     | GotSvg String
+    | DebounceTime Action String Time.Posix
+    | CheckDebounce Action Time.Posix String ()
     | SetShape Shape
     | SetObject String Object
     | AttributeSlide DragEvent String (Lens Object Float) Pointer.Event
-    | AttributeWheel (Lens Object Float) Wheel.Event
+    | AttributeWheel Action String (Lens Object Float) Wheel.Event
     | SetWithLens Action (Lens Object Float) Float
     | SetTransformation String (Lens Object Transformation) Transformation
     | Center
@@ -141,6 +147,7 @@ init key url =
     , selectedObjectId = Just 0
     , guidesVisible = True
     , currentUpdating = ( Nothing, 0 )
+    , wheelState = Dict.empty
     , navigationKey = key
     }
 
@@ -207,14 +214,18 @@ update msg model =
                     , saveToUrl model.navigationKey model.objects
                     )
 
-        AttributeWheel lens wheelEvent ->
+        AttributeWheel action id lens wheelEvent ->
+            let
+                runDebounce =
+                    Task.perform (DebounceTime action id) Time.now
+            in
             ( { model
                 | objects =
                     updateObject model.selectedObjectId
                         (Lens.modify lens ((+) wheelEvent.deltaY))
                         model.objects
               }
-            , Cmd.none
+            , runDebounce
             )
 
         SetWithLens action lens val ->
@@ -255,6 +266,44 @@ update msg model =
 
         GotSvg output ->
             ( model, download "your-svg" output )
+
+        DebounceTime action id posix ->
+            ( { model
+                | wheelState =
+                    Dict.insert id
+                        posix
+                        model.wheelState
+              }
+            , Task.perform (CheckDebounce action posix id) (Process.sleep 800)
+            )
+
+        CheckDebounce action oldTime id _ ->
+            case Dict.get id model.wheelState of
+                Just lastScroll ->
+                    if lastScroll == oldTime then
+                        -- hasn't changed in a second
+                        -- Then write history!and clear it!
+                        ( { model
+                            | wheelState =
+                                Debug.log "Write History"
+                                    Dict.remove
+                                    id
+                                    model.wheelState
+                            , history =
+                                appendHistory
+                                    { action = action
+                                    , objectsState = model.objects
+                                    }
+                                    model.history
+                          }
+                        , saveToUrl model.navigationKey model.objects
+                        )
+
+                    else
+                        ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         SetShape shape ->
             let
@@ -468,11 +517,13 @@ view model =
                         numberInput
                             { label = "X"
                             , lens = Object.xLens
+                            , id = "shape-x"
                             }
                     , withSelectedObject model emptyHtml <|
                         numberInput
                             { label = "Y"
                             , lens = Object.yLens
+                            , id = "shape-y"
                             }
                     ]
                 , withSelectedObject model emptyHtml <|
@@ -482,6 +533,7 @@ view model =
                         numberInput
                             { label = "Rotate"
                             , lens = Object.baseRotation
+                            , id = "shape-rotate"
                             }
                     , withSelectedObject model emptyHtml <|
                         viewShapeConverters
@@ -493,6 +545,7 @@ view model =
                         numberInput
                             { label = "Loops"
                             , lens = Object.loopFloorLens
+                            , id = "shape-loops"
                             }
                     ]
                 , controlSubSection "Rotation"
@@ -501,11 +554,13 @@ view model =
                         numberInput
                             { label = "Anchor X"
                             , lens = Object.anchorXLens
+                            , id = "shape-anchor-x"
                             }
                     , withSelectedObject model emptyHtml <|
                         numberInput
                             { label = "Anchor Y"
                             , lens = Object.anchorYLens
+                            , id = "shape-anchor-y"
                             }
                     ]
                 , withSelectedObject model emptyHtml <|
@@ -716,6 +771,7 @@ withSelectedObject model default fn =
 type alias NumberInputConfig =
     { label : String
     , lens : Lens Object Float
+    , id : String
     }
 
 
@@ -727,6 +783,7 @@ sizeAttributes object =
                 [ numberInput
                     { label = "Radius"
                     , lens = Lens.compose Object.shapeLens (Shape.radiusLens 10)
+                    , id = "size-radius"
                     }
                     object
                 ]
@@ -736,22 +793,27 @@ sizeAttributes object =
                 [ numberInput
                     { label = "Width"
                     , lens = Lens.compose Object.shapeLens (Shape.widthLens 10)
+                    , id = "size-width"
                     }
                     object
                 , numberInput
                     { label = "Height"
                     , lens = Lens.compose Object.shapeLens (Shape.heightLens 10)
+                    , id = "size-height"
                     }
                     object
                 ]
 
 
 numberInput : NumberInputConfig -> Object -> Html Msg
-numberInput { label, lens } object =
+numberInput { label, lens, id } object =
     let
+        action =
+            ChangeField label
+
         inputMsg str =
             Maybe.withDefault (.get lens object) (String.toFloat str)
-                |> SetWithLens (ChangeField label) lens
+                |> SetWithLens action lens
 
         downEvent =
             Html.Events.custom "pointerdown" <|
@@ -765,7 +827,7 @@ numberInput { label, lens } object =
         , Pointer.onMove <| AttributeSlide Move label lens
         , Pointer.onUp <| AttributeSlide Stop label lens
         , downEvent
-        , Wheel.onWheel <| AttributeWheel lens
+        , Wheel.onWheel <| AttributeWheel action id lens
         ]
         [ Html.div [] [ Html.text <| label ++ ":" ]
         , Html.div [ Html.Attributes.class "pr-4" ]
@@ -865,6 +927,13 @@ transformationView label lens object =
                 (transformationMsg (Random { min = 0, max = 100, seed = 0 }))
             ]
 
+        makeId l =
+            String.concat
+                [ String.toLower label
+                , "-"
+                , l
+                ]
+
         renderToggler =
             case transformation of
                 Linear float ->
@@ -872,6 +941,7 @@ transformationView label lens object =
                         [ numberInput
                             { label = "Number"
                             , lens = Lens.compose lens (Transformation.linearLens 0)
+                            , id = makeId "number"
                             }
                             object
                         ]
@@ -882,11 +952,13 @@ transformationView label lens object =
                         [ numberInput
                             { label = "Amplitude"
                             , lens = Lens.compose lens (Transformation.amplitudeLens 0)
+                            , id = makeId "amplitude"
                             }
                             object
                         , numberInput
                             { label = "Frequency"
                             , lens = Lens.compose lens (Transformation.frequencyLens 0)
+                            , id = makeId "frequency"
                             }
                             object
                         ]
@@ -897,11 +969,13 @@ transformationView label lens object =
                         [ numberInput
                             { label = "Min"
                             , lens = Lens.compose lens (Transformation.minLens 0)
+                            , id = makeId "min"
                             }
                             object
                         , numberInput
                             { label = "Max"
                             , lens = Lens.compose lens (Transformation.maxLens 0)
+                            , id = makeId "max"
                             }
                             object
                         ]
@@ -909,6 +983,7 @@ transformationView label lens object =
                         [ numberInput
                             { label = "Rand"
                             , lens = Lens.compose lens (Transformation.randLens 0)
+                            , id = makeId "rand"
                             }
                             object
                         ]
