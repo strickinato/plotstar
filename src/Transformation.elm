@@ -195,7 +195,7 @@ linearDecoder =
 
 encode : Transformation -> Json.Encode.Value
 encode transformation =
-    case Debug.log "Tranny:" transformation of
+    case transformation of
         Linear float ->
             Json.Encode.float float
 
