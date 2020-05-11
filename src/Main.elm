@@ -28,9 +28,6 @@ import Transformation exposing (Transformation(..))
 import Url exposing (Url)
 
 
-port dragEvents : (Json.Decode.Value -> msg) -> Sub msg
-
-
 port gotSvg : (String -> msg) -> Sub msg
 
 
@@ -44,7 +41,6 @@ type alias Model =
     { objects : Dict Id Object
     , history : SelectList Snapshot
     , selectedObjectId : Maybe Id
-    , currentDraggable : Maybe DraggableIdentifier -- TODO get rid of this style of draggable
     , guidesVisible : Bool
     , currentUpdating : ( Maybe Float, Float ) -- Starting Offset
     , navigationKey : Key
@@ -56,8 +52,7 @@ type alias Id =
 
 
 type Msg
-    = Drag DragMsg
-    | UrlChanged Url
+    = UrlChanged Url
     | GetSvg
     | GotSvg String
     | SetShape Shape
@@ -133,10 +128,7 @@ main =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.batch
-        [ Sub.map Drag <| dragEvents decodeDragEvents
-        , gotSvg GotSvg
-        ]
+    Sub.batch [ gotSvg GotSvg ]
 
 
 initialSnapshot : Snapshot
@@ -175,7 +167,6 @@ init key url =
     { history = SelectList.singleton initialSnapshot
     , objects = objectsFromUrl url initialSnapshot.objectsState
     , selectedObjectId = Just 0
-    , currentDraggable = Nothing
     , guidesVisible = True
     , currentUpdating = ( Nothing, 0 )
     , navigationKey = key
@@ -317,47 +308,6 @@ update msg model =
 
         UrlChanged url ->
             ( model, Cmd.none )
-
-        Drag { event, cursor, draggables } ->
-            let
-                newModel =
-                    case event of
-                        Start ->
-                            { model
-                                | currentDraggable =
-                                    draggables
-                                        |> List.filter
-                                            (\( _, draggable ) ->
-                                                distance cursor draggable < 80
-                                            )
-                                        |> closestIdentifier cursor
-                                        |> Maybe.map (\identifier -> Just { id = identifier, dragStart = cursor })
-                                        |> Maybe.join
-                            }
-
-                        Move ->
-                            case Maybe.map (\a -> Tuple.pair a.id a.dragStart) model.currentDraggable of
-                                Just ( ShapeDraggable id, _ ) ->
-                                    moveDraggable model cursor id
-
-                                Just ( AttributeDraggable attr, coords ) ->
-                                    model
-
-                                -- { model
-                                --     | objects =
-                                --         objectsUpdater
-                                --             model.selectedObjectId
-                                --             (attributeToLens attr)
-                                --             (String.fromFloat (cursor.x - coords.x))
-                                --             model.objects
-                                -- }
-                                Nothing ->
-                                    model
-
-                        Stop ->
-                            { model | currentDraggable = Nothing }
-            in
-            ( newModel, Cmd.none )
 
         GetSvg ->
             ( model, getSvg svgId )
@@ -1520,32 +1470,6 @@ coordsDecoder =
     Json.Decode.map2 Coords
         (Json.Decode.field "x" Json.Decode.float)
         (Json.Decode.field "y" Json.Decode.float)
-
-
-
--- Functions for manipulating and Coords
-
-
-closestIdentifier : Coords -> List ( a, Coords ) -> Maybe a
-closestIdentifier cursor draggables =
-    draggables
-        |> List.map (Tuple.mapSecond (distance cursor))
-        -- Find the vertex closest to the cursor.
-        |> List.sortBy Tuple.second
-        |> List.head
-        |> Maybe.map Tuple.first
-
-
-distance : Coords -> Coords -> Float
-distance coords1 coords2 =
-    let
-        dx =
-            coords1.x - coords2.x
-
-        dy =
-            coords1.y - coords2.y
-    in
-    sqrt ((dx ^ 2) + (dy ^ 2))
 
 
 decodeObjects : Json.Decode.Decoder (Dict Id Object)

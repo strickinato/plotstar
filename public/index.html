@@ -16,7 +16,6 @@
     <body>
         <div id="mount"></div>
         <script type="text/javascript" src="/elm.js"></script>
-        <script type="text/javascript" src="/index.js"></script>
         <script type="text/javascript">
             var app = Elm.Main.init({
                 node: document.getElementById('mount'),
@@ -31,8 +30,6 @@
             app.ports.capture.subscribe(function(pointerId) {
                 event.target.setPointerCapture(pointerId)
             })
-
-            setupDraggable(app.ports.dragEvents.send);
 
         </script>
     </body>
