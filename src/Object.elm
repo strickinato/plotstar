@@ -9,7 +9,7 @@ import Monocle.Iso exposing (Iso)
 import Monocle.Lens exposing (Lens)
 import Monocle.Prism exposing (Prism)
 import Random
-import Shape exposing (Shape)
+import Shape exposing (Shape(..))
 import Transformation exposing (Transformation)
 
 
@@ -26,6 +26,16 @@ type alias Object =
     , rotation : Transformation
     , shape : Shape
     }
+
+
+label : Object -> String
+label object =
+    case object.shape of
+        Square _ ->
+            "Square"
+
+        Circle _ ->
+            "Circle"
 
 
 loopFloorLens : Lens Object Float

@@ -4,7 +4,6 @@ import Base64
 import Browser
 import Browser.Navigation exposing (Key)
 import Dict exposing (Dict)
-import Dict.Extra
 import File.Download as Download
 import Html exposing (Html)
 import Html.Attributes exposing (attribute, style)
@@ -18,8 +17,8 @@ import Maybe.Extra as Maybe
 import Monocle.Compose as Compose
 import Monocle.Lens as Lens exposing (Lens)
 import Object exposing (Object)
+import ObjectDict exposing (ObjectDict)
 import Random
-import Result.Extra
 import SelectList exposing (SelectList)
 import Shape exposing (Shape(..))
 import Svg exposing (Svg)
@@ -28,27 +27,24 @@ import Transformation exposing (Transformation(..))
 import Url exposing (Url)
 
 
-port gotSvg : (String -> msg) -> Sub msg
-
-
-port getSvg : String -> Cmd msg
-
-
-port capture : Int -> Cmd msg
-
-
 type alias Model =
-    { objects : Dict Id Object
+    { objects : ObjectDict
     , history : SelectList Snapshot
-    , selectedObjectId : Maybe Id
+    , selectedObjectId : Maybe ObjectDict.Id
     , guidesVisible : Bool
     , currentUpdating : ( Maybe Float, Float ) -- Starting Offset
     , navigationKey : Key
     }
 
 
-type alias Id =
-    Int
+canvasWidth : Int
+canvasWidth =
+    1200
+
+
+canvasHeight : Int
+canvasHeight =
+    900
 
 
 type Msg
@@ -64,33 +60,15 @@ type Msg
     | Center
     | Delete
     | Undo Int
-    | SelectObject (Maybe Id)
+    | SelectObject (Maybe ObjectDict.Id)
     | AddNewShape Shape
     | SetGuidesVisible Bool
     | NoOp
 
 
-type alias DragMsg =
-    { event : DragEvent
-    , cursor : Coords
-    , draggables : List ( DraggableType, Coords )
-    }
-
-
-type DraggableType
-    = ShapeDraggable Id
-    | AttributeDraggable Attribute
-
-
-type alias DraggableIdentifier =
-    { id : DraggableType
-    , dragStart : Coords
-    }
-
-
 type alias Snapshot =
     { action : Action
-    , objectsState : Dict Id Object
+    , objectsState : ObjectDict
     }
 
 
@@ -147,25 +125,19 @@ initialSnapshot =
     { action = Initial, objectsState = initialObjects }
 
 
-objectsFromUrl : Url -> Dict Id Object -> Dict Id Object
-objectsFromUrl url default =
-    case url.fragment of
-        Just base64Fragment ->
-            base64Fragment
-                |> Base64.decode
-                |> Result.map (Json.Decode.decodeString decodeObjects)
-                |> Result.map (Result.mapError (always "Couldn't decode from URL"))
-                |> Result.Extra.join
-                |> Result.withDefault default
-
-        Nothing ->
-            default
-
-
 init : Key -> Url -> Model
 init key url =
+    let
+        default =
+            initialSnapshot.objectsState
+
+        objectsFromUrl =
+            url.fragment
+                |> Maybe.map (ObjectDict.fromBase64 >> Result.withDefault default)
+                |> Maybe.withDefault default
+    in
     { history = SelectList.singleton initialSnapshot
-    , objects = objectsFromUrl url initialSnapshot.objectsState
+    , objects = objectsFromUrl
     , selectedObjectId = Just 0
     , guidesVisible = True
     , currentUpdating = ( Nothing, 0 )
@@ -175,34 +147,6 @@ init key url =
 
 svgId =
     "plotter-otter-svg"
-
-
-
--- Update logic
-
-
-updateObject : Maybe Id -> (Object -> Object) -> Dict Int Object -> Dict Int Object
-updateObject maybeId updater objects =
-    case maybeId of
-        Just selectedId ->
-            Dict.update selectedId
-                (Maybe.map updater)
-                objects
-
-        Nothing ->
-            objects
-
-
-objectsUpdaterNew : Maybe Id -> Lens Object Float -> (Float -> Float) -> Dict Id Object -> Dict Id Object
-objectsUpdaterNew maybeId lens modifier objects =
-    case maybeId of
-        Just selectedId ->
-            Dict.update selectedId
-                (Maybe.map (Lens.modify lens modifier))
-                objects
-
-        Nothing ->
-            objects
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -241,9 +185,8 @@ update msg model =
                                     in
                                     { model
                                         | objects =
-                                            objectsUpdaterNew model.selectedObjectId
-                                                lens
-                                                modifier
+                                            updateObject model.selectedObjectId
+                                                (Lens.modify lens modifier)
                                                 model.objects
                                         , currentUpdating = ( Just firstValue, offset )
                                     }
@@ -267,9 +210,8 @@ update msg model =
         AttributeWheel lens wheelEvent ->
             ( { model
                 | objects =
-                    objectsUpdaterNew model.selectedObjectId
-                        lens
-                        ((+) wheelEvent.deltaY)
+                    updateObject model.selectedObjectId
+                        (Lens.modify lens ((+) wheelEvent.deltaY))
                         model.objects
               }
             , Cmd.none
@@ -278,9 +220,8 @@ update msg model =
         SetWithLens action lens val ->
             let
                 newObjects =
-                    objectsUpdaterNew model.selectedObjectId
-                        lens
-                        (always val)
+                    updateObject model.selectedObjectId
+                        (Lens.modify lens (always val))
                         model.objects
             in
             ( { model
@@ -405,7 +346,7 @@ update msg model =
                     case removedObject of
                         Just removed ->
                             { model
-                                | selectedObjectId = getAnyId newObjects
+                                | selectedObjectId = ObjectDict.anyId newObjects
                                 , objects = newObjects
                                 , history =
                                     appendHistory
@@ -428,7 +369,9 @@ update msg model =
         AddNewShape newShape ->
             let
                 ( newSelectedId, newObjects ) =
-                    insertShape newShape model.objects
+                    ObjectDict.insert
+                        (Object.initWithShape canvasWidth canvasHeight newShape)
+                        model.objects
             in
             ( { model
                 | objects = newObjects
@@ -450,10 +393,20 @@ update msg model =
             ( model, Cmd.none )
 
 
-saveToUrl : Key -> Dict Id Object -> Cmd Msg
+
+-- Update Helpers
+
+
+updateObject : Maybe ObjectDict.Id -> (Object -> Object) -> ObjectDict -> ObjectDict
+updateObject maybeId updater objects =
+    Maybe.map (\id -> ObjectDict.updateObject id updater objects) maybeId
+        |> Maybe.withDefault objects
+
+
+saveToUrl : Key -> ObjectDict -> Cmd Msg
 saveToUrl key objects =
     objects
-        |> encodeObjects
+        |> ObjectDict.encode
         |> Json.Encode.encode 0
         |> Base64.encode
         |> String.append "#"
@@ -467,56 +420,9 @@ appendHistory newSnapshot history =
         |> SelectList.insertAfter newSnapshot
 
 
-getAnyId : Dict comparable b -> Maybe comparable
-getAnyId dict =
-    dict
-        |> Dict.keys
-        |> List.head
-
-
 download : String -> String -> Cmd msg
 download fileName svg =
     Download.string (String.append fileName ".svg") "image/svg+xml" svg
-
-
-insertShape : Shape -> Dict Int Object -> ( Int, Dict Int Object )
-insertShape shape dict =
-    let
-        newKey =
-            nextKey dict
-    in
-    ( newKey
-    , Dict.insert newKey
-        (Object.initWithShape canvasWidth canvasHeight shape)
-        dict
-    )
-
-
-nextKey : Dict Int Object -> Int
-nextKey dict =
-    Dict.keys dict
-        |> List.maximum
-        |> Maybe.map ((+) 1)
-        |> Maybe.withDefault 0
-
-
-moveDraggable : Model -> Coords -> Id -> Model
-moveDraggable model coords id =
-    { model
-        | objects =
-            Dict.update id
-                (updateObjectLocation coords)
-                model.objects
-    }
-
-
-updateObjectLocation : Coords -> Maybe Object -> Maybe Object
-updateObjectLocation coords maybeObject =
-    maybeObject
-        |> Maybe.map
-            (\object ->
-                { object | x = coords.x, y = coords.y }
-            )
 
 
 view : Model -> Html Msg
@@ -945,7 +851,7 @@ transformationView label lens object =
             lens.get object
 
         transformationEq t =
-            t == toOption transformation
+            t == Transformation.label transformation
 
         tabOptions =
             [ TabOption "Linear"
@@ -1015,29 +921,6 @@ transformationView label lens object =
         ]
 
 
-toOption : Transformation -> String
-toOption transformation =
-    case transformation of
-        Linear _ ->
-            "Linear"
-
-        Cyclical _ ->
-            "Cyclical"
-
-        Random _ ->
-            "Random"
-
-
-canvasWidth : Int
-canvasWidth =
-    1200
-
-
-canvasHeight : Int
-canvasHeight =
-    900
-
-
 viewCenterPoint : Bool -> Svg Msg
 viewCenterPoint bool =
     if bool then
@@ -1073,7 +956,7 @@ viewObjectSelector : Model -> Html Msg
 viewObjectSelector model =
     let
         asItem ( id, obj ) =
-            { text = objectLabel obj ++ " " ++ String.fromInt id
+            { text = Object.label obj ++ " " ++ String.fromInt id
             , clickHandler = always (SelectObject (Just id))
             , itemState =
                 if isSelected model id then
@@ -1088,31 +971,7 @@ viewObjectSelector model =
         |> itemList
 
 
-
---     (\( id, obj ) ->
---         Html.li
---             [ Html.Events.onClick (SelectObject (Just id))
---             , if isSelected model id then
---                 Html.Attributes.style "color" "red"
---               else
---                 Html.Attributes.style "color" "black"
---             ]
---             [ Html.text <| objectLabel obj ++ " " ++ String.fromInt id ]
---     )
--- |> Html.ul []
-
-
-objectLabel : Object -> String
-objectLabel object =
-    case object.shape of
-        Square _ ->
-            "Square"
-
-        Circle _ ->
-            "Circle"
-
-
-isSelected : Model -> Id -> Bool
+isSelected : Model -> ObjectDict.Id -> Bool
 isSelected model id =
     Just id == model.selectedObjectId
 
@@ -1121,33 +980,6 @@ getSelectedObject : Model -> Maybe Object
 getSelectedObject model =
     Maybe.map (\id -> Dict.get id model.objects) model.selectedObjectId
         |> Maybe.join
-
-
-viewSlider : Model -> String -> (Object -> String) -> (String -> Msg) -> String -> String -> Html Msg
-viewSlider model label accessor msg min max =
-    case getSelectedObject model of
-        Just o ->
-            Html.label []
-                [ Html.span
-                    []
-                    [ Html.text <| label ++ ": " ]
-                , Html.input
-                    [ Html.Attributes.value <| accessor o
-                    , Html.Events.onInput msg
-                    ]
-                    []
-                , Html.input
-                    [ Html.Attributes.type_ "range"
-                    , Html.Attributes.value <| accessor o
-                    , Html.Events.onInput msg
-                    , Html.Attributes.min min
-                    , Html.Attributes.max max
-                    ]
-                    []
-                ]
-
-        Nothing ->
-            Html.span [] []
 
 
 loopToColor : Model -> Int -> Int -> String
@@ -1288,41 +1120,6 @@ calculatedRotation loop object =
         ]
 
 
-renderMain : Model -> ( Int, Object ) -> Svg Msg
-renderMain { guidesVisible, selectedObjectId } ( id, object ) =
-    let
-        color =
-            if selectedObjectId == Just id && guidesVisible then
-                "red"
-
-            else
-                "black"
-    in
-    case object.shape of
-        Square squareData ->
-            Svg.rect
-                [ fill "none"
-                , stroke color
-                , x (String.fromFloat <| calculatedX 0 object)
-                , y (String.fromFloat <| calculatedY 0 object)
-                , width (String.fromFloat squareData.width)
-                , height (String.fromFloat squareData.height)
-                , attribute "data-beacon" <| String.fromInt id
-                ]
-                []
-
-        Circle circleData ->
-            Svg.circle
-                [ fill "none"
-                , stroke color
-                , cx (String.fromFloat <| calculatedX 0 object)
-                , cy (String.fromFloat <| calculatedY 0 object)
-                , r (String.fromFloat <| circleData.radius)
-                , attribute "data-beacon" <| String.fromInt id
-                ]
-                []
-
-
 toggle : (Bool -> Msg) -> Bool -> String -> Html Msg
 toggle msg value text =
     Html.div []
@@ -1341,146 +1138,13 @@ toggle msg value text =
 
 
 
--- Json Decoders
+-- ports
 
 
-decodeDragEvents : Json.Decode.Value -> DragMsg
-decodeDragEvents value =
-    case Json.Decode.decodeValue msgDecoder value of
-        Ok msg ->
-            msg
-
-        Err err ->
-            -- Crash the javascript :(
-            -- I would normally have an error state for the whole
-            -- application that maybe this gets set to
-            Debug.todo <| Json.Decode.errorToString err
+port gotSvg : (String -> msg) -> Sub msg
 
 
-msgDecoder : Json.Decode.Decoder DragMsg
-msgDecoder =
-    Json.Decode.map3 DragMsg
-        (Json.Decode.field "type" eventDecoder)
-        (Json.Decode.field "cursor" coordsDecoder)
-        (Json.Decode.field "beacons" <| Json.Decode.list draggablesDecoder)
+port getSvg : String -> Cmd msg
 
 
-draggablesDecoder : Json.Decode.Decoder ( DraggableType, Coords )
-draggablesDecoder =
-    Json.Decode.map2
-        Tuple.pair
-        idDecoder
-        coordsDecoder
-
-
-idDecoder : Json.Decode.Decoder DraggableType
-idDecoder =
-    Json.Decode.string
-        |> Json.Decode.andThen idToType
-        |> Json.Decode.field "id"
-
-
-
--- ATTRIBUTE
-
-
-type Attribute
-    = Loops
-    | X
-    | Y
-    | AnchorX
-    | AnchorY
-
-
-idToType : String -> Json.Decode.Decoder DraggableType
-idToType str =
-    case String.toInt str of
-        Just i ->
-            Json.Decode.succeed <| ShapeDraggable i
-
-        Nothing ->
-            case idToAttribute str of
-                Ok id ->
-                    Json.Decode.succeed id
-
-                Err err ->
-                    Json.Decode.fail "Not a valid Id"
-
-
-
--- attributeToLens : Attribute -> Lens Object String
--- attributeToLens attr =
---     case attr of
---         Loops ->
---             Object.loopsLens
---         X ->
---             Object.xLens
---         Y ->
---             Object.yLens
---         AnchorX ->
---             Object.anchorXLens
---         AnchorY ->
---             Object.anchorYLens
-
-
-idToAttribute : String -> Result String DraggableType
-idToAttribute str =
-    case str of
-        "loops" ->
-            Ok <| AttributeDraggable Loops
-
-        "x" ->
-            Ok <| AttributeDraggable X
-
-        "y" ->
-            Ok <| AttributeDraggable Y
-
-        "anchor-x" ->
-            Ok <| AttributeDraggable AnchorX
-
-        "anchor-y" ->
-            Ok <| AttributeDraggable AnchorY
-
-        other ->
-            Err <| other ++ " is not a thing"
-
-
-eventDecoder : Json.Decode.Decoder DragEvent
-eventDecoder =
-    Json.Decode.string
-        |> Json.Decode.andThen
-            (\eventType ->
-                case eventType of
-                    "start" ->
-                        Json.Decode.succeed Start
-
-                    "move" ->
-                        Json.Decode.succeed Move
-
-                    "stop" ->
-                        Json.Decode.succeed Stop
-
-                    _ ->
-                        Json.Decode.fail ("Unknown drag event type " ++ eventType)
-            )
-
-
-coordsDecoder : Json.Decode.Decoder Coords
-coordsDecoder =
-    Json.Decode.map2 Coords
-        (Json.Decode.field "x" Json.Decode.float)
-        (Json.Decode.field "y" Json.Decode.float)
-
-
-decodeObjects : Json.Decode.Decoder (Dict Id Object)
-decodeObjects =
-    Json.Decode.dict Object.decoder
-        |> Json.Decode.map (Dict.Extra.mapKeys (Maybe.withDefault 0 << String.toInt))
-
-
-encodeObjects : Dict Id Object -> Json.Encode.Value
-encodeObjects objectDict =
-    Json.Encode.dict
-        String.fromInt
-        Object.encode
-        objectDict
+port capture : Int -> Cmd msg
