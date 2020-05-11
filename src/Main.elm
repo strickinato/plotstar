@@ -115,34 +115,29 @@ subscriptions _ =
     Sub.batch [ gotSvg GotSvg ]
 
 
-initialSnapshot : Snapshot
-initialSnapshot =
-    let
-        initialObjects =
-            Dict.fromList
-                [ ( 0
-                  , Object.initWithShape
-                        canvasWidth
-                        canvasHeight
-                        Shape.defaultSquare
-                  )
-                ]
-    in
-    { action = Initial, objectsState = initialObjects }
+defaultObjects : ObjectDict
+defaultObjects =
+    Dict.fromList
+        [ ( 0
+          , Object.initWithShape
+                canvasWidth
+                canvasHeight
+                Shape.defaultSquare
+          )
+        ]
 
 
 init : Key -> Url -> Model
 init key url =
     let
-        default =
-            initialSnapshot.objectsState
-
         objectsFromUrl =
             url.fragment
-                |> Maybe.map (ObjectDict.fromBase64 >> Result.withDefault default)
-                |> Maybe.withDefault default
+                |> Maybe.map (ObjectDict.fromBase64 >> Result.withDefault defaultObjects)
+                |> Maybe.withDefault defaultObjects
     in
-    { history = SelectList.singleton initialSnapshot
+    { history =
+        SelectList.singleton
+            { action = Initial, objectsState = objectsFromUrl }
     , objects = objectsFromUrl
     , selectedObjectId = Just 0
     , guidesVisible = True
