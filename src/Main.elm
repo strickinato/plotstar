@@ -60,15 +60,12 @@ type Msg
     | UrlChanged Url
     | GetSvg
     | GotSvg String
-    | SetXShift Transformation
-    | SetYShift Transformation
-    | SetScale Transformation
-    | SetRotation Transformation
     | SetShape Shape
     | SetObject String Object
     | AttributeSlide DragEvent String (Lens Object Float) Pointer.Event
     | AttributeWheel (Lens Object Float) Wheel.Event
-    | SetWithLens String (Lens Object Float) Float
+    | SetWithLens Action (Lens Object Float) Float
+    | SetTransformation String (Lens Object Transformation) Transformation
     | Center
     | Delete
     | Undo Int
@@ -287,7 +284,7 @@ update msg model =
             , Cmd.none
             )
 
-        SetWithLens label lens val ->
+        SetWithLens action lens val ->
             let
                 newObjects =
                     objectsUpdaterNew model.selectedObjectId
@@ -299,7 +296,7 @@ update msg model =
                 | objects = newObjects
                 , history =
                     appendHistory
-                        { action = ChangeField label, objectsState = newObjects }
+                        { action = action, objectsState = newObjects }
                         model.history
               }
             , saveToUrl model.navigationKey model.objects
@@ -368,26 +365,6 @@ update msg model =
         GotSvg output ->
             ( model, download "your-svg" output )
 
-        SetRotation transformation ->
-            let
-                newObjects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | rotation = transformation })
-                        model.objects
-            in
-            ( { model
-                | objects = newObjects
-                , history =
-                    appendHistory
-                        { action = ChangeTransformationType transformation "Rotation"
-                        , objectsState = newObjects
-                        }
-                        model.history
-              }
-            , saveToUrl model.navigationKey newObjects
-            )
-
         SetShape shape ->
             let
                 newObjects =
@@ -428,62 +405,19 @@ update msg model =
             , saveToUrl model.navigationKey newObjects
             )
 
-        SetXShift transformation ->
+        SetTransformation label lens transformation ->
             let
                 newObjects =
                     updateObject
                         model.selectedObjectId
-                        (\x -> { x | xShift = transformation })
+                        (lens.set transformation)
                         model.objects
             in
             ( { model
                 | objects = newObjects
                 , history =
                     appendHistory
-                        { action =
-                            ChangeTransformationType transformation "X Shift"
-                        , objectsState = newObjects
-                        }
-                        model.history
-              }
-            , saveToUrl model.navigationKey newObjects
-            )
-
-        SetYShift transformation ->
-            let
-                newObjects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | yShift = transformation })
-                        model.objects
-            in
-            ( { model
-                | objects = newObjects
-                , history =
-                    appendHistory
-                        { action =
-                            ChangeTransformationType transformation "Y Shift"
-                        , objectsState = newObjects
-                        }
-                        model.history
-              }
-            , saveToUrl model.navigationKey newObjects
-            )
-
-        SetScale transformation ->
-            let
-                newObjects =
-                    updateObject
-                        model.selectedObjectId
-                        (\x -> { x | scale = transformation })
-                        model.objects
-            in
-            ( { model
-                | objects = newObjects
-                , history =
-                    appendHistory
-                        { action =
-                            ChangeTransformationType transformation "Scale"
+                        { action = ChangeTransformationType transformation label
                         , objectsState = newObjects
                         }
                         model.history
@@ -718,13 +652,17 @@ view model =
                             , lens = Object.anchorYLens
                             }
                     ]
-                , viewTransformation model Object.rotationLens .rotation SetRotation
+                , withSelectedObject model emptyHtml <|
+                    transformationView "Rotation" Object.rotationLens
                 , controlSubSection "X-Shift"
-                , viewTransformation model Object.xShiftLens .xShift SetXShift
+                , withSelectedObject model emptyHtml <|
+                    transformationView "X Shift" Object.xShiftLens
                 , controlSubSection "Y-Shift"
-                , viewTransformation model Object.yShiftLens .yShift SetYShift
+                , withSelectedObject model emptyHtml <|
+                    transformationView "Y Shift" Object.yShiftLens
                 , controlSubSection "Scale"
-                , viewTransformation model Object.scaleLens .scale SetScale
+                , withSelectedObject model emptyHtml <|
+                    transformationView "Scale" Object.scaleLens
                 ]
             , controlContainer <|
                 [ controlSection "History"
@@ -957,7 +895,7 @@ numberInput { label, lens } object =
     let
         inputMsg str =
             Maybe.withDefault (.get lens object) (String.toFloat str)
-                |> SetWithLens label lens
+                |> SetWithLens (ChangeField label) lens
 
         downEvent =
             Html.Events.custom "pointerdown" <|
@@ -1011,16 +949,6 @@ controlSubSection name =
     Html.h4 [ Html.Attributes.class "pt-4" ] [ Html.text name ]
 
 
-viewTransformation : Model -> Lens Object Transformation -> (Object -> Transformation) -> (Transformation -> Msg) -> Html Msg
-viewTransformation model lens acc transformationMsg =
-    case getSelectedObject model of
-        Just o ->
-            transformationView (acc o) lens transformationMsg o
-
-        Nothing ->
-            Html.text ""
-
-
 type alias TabOption =
     { name : String
     , selected : Bool
@@ -1057,9 +985,15 @@ tabbed options =
             options
 
 
-transformationView : Transformation -> Lens Object Transformation -> (Transformation -> Msg) -> Object -> Html Msg
-transformationView transformation lens transformationMsg object =
+transformationView : String -> Lens Object Transformation -> Object -> Html Msg
+transformationView label lens object =
     let
+        transformationMsg =
+            SetTransformation label lens
+
+        transformation =
+            lens.get object
+
         transformationEq t =
             t == toOption transformation
 
