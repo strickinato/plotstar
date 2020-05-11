@@ -546,8 +546,6 @@ view model =
                 , controlSubSection "Scale"
                 , withSelectedObject model emptyHtml <|
                     transformationView "Scale" Object.scaleLens
-                , withSelectedObject model emptyHtml <|
-                    transformationView "Rotation" Object.rotationLens
                 , controlSubSection "X-Shift"
                 , withSelectedObject model emptyHtml <|
                     transformationView "X Shift" Object.xShiftLens
@@ -569,6 +567,8 @@ view model =
                             , id = "shape-anchor-y"
                             }
                     ]
+                , withSelectedObject model emptyHtml <|
+                    transformationView "Rotation" Object.rotationLens
                 ]
             , controlContainer <|
                 [ controlSection "History"
