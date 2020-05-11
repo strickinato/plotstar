@@ -179,7 +179,28 @@ examples w h =
     , ( "Napkin", napkin w h )
     , ( "Scorpion Tail", scorpion w h )
     , ( "Spots", spots w h )
+    , ( "RippleBall", rippleBall w h )
     ]
+
+
+rippleBall : Int -> Int -> Object
+rippleBall cw ch =
+    { x = 543
+    , y = 391
+    , anchorX = 624
+    , anchorY = 450
+    , baseRotation = 302
+    , xShift = Transformation.Linear 0
+    , yShift = Transformation.Linear 0
+    , loops = 182
+    , rotation =
+        Transformation.Cyclical
+            { amplitude = 3, frequency = 5 }
+    , shape = Shape.Circle { radius = 2 }
+    , scale =
+        Transformation.Cyclical
+            { amplitude = 353, frequency = 24 }
+    }
 
 
 napkin : Int -> Int -> Object
