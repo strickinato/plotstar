@@ -543,6 +543,17 @@ view model =
                             , id = "shape-loops"
                             }
                     ]
+                , controlSubSection "Scale"
+                , withSelectedObject model emptyHtml <|
+                    transformationView "Scale" Object.scaleLens
+                , withSelectedObject model emptyHtml <|
+                    transformationView "Rotation" Object.rotationLens
+                , controlSubSection "X-Shift"
+                , withSelectedObject model emptyHtml <|
+                    transformationView "X Shift" Object.xShiftLens
+                , controlSubSection "Y-Shift"
+                , withSelectedObject model emptyHtml <|
+                    transformationView "Y Shift" Object.yShiftLens
                 , controlSubSection "Rotation"
                 , controlRow <|
                     [ withSelectedObject model emptyHtml <|
@@ -558,17 +569,6 @@ view model =
                             , id = "shape-anchor-y"
                             }
                     ]
-                , withSelectedObject model emptyHtml <|
-                    transformationView "Rotation" Object.rotationLens
-                , controlSubSection "X-Shift"
-                , withSelectedObject model emptyHtml <|
-                    transformationView "X Shift" Object.xShiftLens
-                , controlSubSection "Y-Shift"
-                , withSelectedObject model emptyHtml <|
-                    transformationView "Y Shift" Object.yShiftLens
-                , controlSubSection "Scale"
-                , withSelectedObject model emptyHtml <|
-                    transformationView "Scale" Object.scaleLens
                 ]
             , controlContainer <|
                 [ controlSection "History"
