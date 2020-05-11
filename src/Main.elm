@@ -98,10 +98,14 @@ type alias Coords =
     { x : Float, y : Float }
 
 
-main : Program () Model Msg
+type alias Flags =
+    { timestamp : Float }
+
+
+main : Program Flags Model Msg
 main =
     Browser.application
-        { init = \_ url key -> ( init key url, Cmd.none )
+        { init = \flags url key -> ( init flags key url, Cmd.none )
         , view = \m -> { title = "Plotter Otter", body = [ view m ] }
         , update = update
         , subscriptions = subscriptions
@@ -127,20 +131,30 @@ defaultObjects =
         ]
 
 
-init : Key -> Url -> Model
-init key url =
+init : Flags -> Key -> Url -> Model
+init flags key url =
     let
+        randomStart =
+            Dict.fromList
+                [ ( 0
+                  , Object.randomExample
+                        canvasWidth
+                        canvasHeight
+                        flags.timestamp
+                  )
+                ]
+
         objectsFromUrl =
             url.fragment
                 |> Maybe.map (ObjectDict.fromBase64 >> Result.withDefault defaultObjects)
-                |> Maybe.withDefault defaultObjects
+                |> Maybe.withDefault randomStart
     in
     { history =
         SelectList.singleton
             { action = Initial, objectsState = objectsFromUrl }
     , objects = objectsFromUrl
     , selectedObjectId = Just 0
-    , guidesVisible = True
+    , guidesVisible = False
     , currentUpdating = ( Nothing, 0 )
     , wheelState = Dict.empty
     , navigationKey = key

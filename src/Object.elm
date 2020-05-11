@@ -1,5 +1,6 @@
 module Object exposing (..)
 
+import Array
 import Json.Decode exposing (Decoder)
 import Json.Decode.Pipeline
 import Json.Encode
@@ -173,6 +174,23 @@ encode record =
         ]
 
 
+randomExample : Int -> Int -> Float -> Object
+randomExample cw ch float =
+    let
+        numExamples =
+            List.length <| examples cw ch
+
+        generator =
+            Random.int 0 numExamples
+                |> Random.map (\a -> Maybe.withDefault (bowTie cw ch) (Maybe.map Tuple.second <| Array.get a (Array.fromList (examples cw ch))))
+
+        randomThing =
+            Random.step generator (Random.initialSeed (floor float))
+                |> Tuple.first
+    in
+    randomThing
+
+
 examples : Int -> Int -> List ( String, Object )
 examples w h =
     [ ( "Bow Tie", bowTie w h )
@@ -250,13 +268,13 @@ spots canvasWidth canvasHeight =
         Transformation.Random
             { min = 0 - (toFloat canvasWidth / 2)
             , max = toFloat canvasWidth / 2
-            , seed = 0
+            , seed = 1
             }
     , yShift =
         Transformation.Random
             { min = 0 - (toFloat canvasHeight / 2)
             , max = toFloat canvasHeight / 2
-            , seed = 0
+            , seed = 2
             }
     , loops = 300
     , rotation = Transformation.Linear 0
@@ -265,7 +283,7 @@ spots canvasWidth canvasHeight =
         Transformation.Random
             { min = -100
             , max = 100
-            , seed = 0
+            , seed = 3
             }
     }
 

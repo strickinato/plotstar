@@ -19,7 +19,7 @@
         <script type="text/javascript">
             var app = Elm.Main.init({
                 node: document.getElementById('mount'),
-                flags: {},
+                flags: { timestamp: Date.now() },
             });
 
             app.ports.getSvg.subscribe(function(id) {
