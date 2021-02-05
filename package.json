@@ -3,11 +3,11 @@
   "version": "0.0.1",
   "license": "MIT",
   "scripts": {
-    "build": "yarn elm:build && yarn css:build",
-    "start": "yarn build && serve public",
-    "develop": "concurrently 'yarn elm:develop' 'yarn css:develop'",
+    "build": "npm run elm:build && npm run css:build",
+    "start": "npm run build && serve public",
+    "develop": "concurrently 'npm run elm:develop' 'npm run css:develop'",
     "elm:develop": "elm-live src/Main.elm --dir=public -- --debug --output=public/elm.js",
-    "css:develop": "find styles -name '*.css' | entr yarn css:build",
+    "css:develop": "find styles -name '*.css' | entr npm run css:build",
     "elm:build": "elm make src/Main.elm --output=public/elm.js",
     "css:build": "tailwindcss build styles/style.css --output public/output.css"
   },
@@ -17,8 +17,5 @@
     "elm-live": "^4.0.2",
     "serve": "^11.3.0",
     "tailwindcss": "^1.4.6"
-  },
-  "peerDependencies": {
-    "entr-bin": "^0.0.1"
   }
 }
