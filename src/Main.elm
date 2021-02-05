@@ -1172,20 +1172,24 @@ calculatedWidth : Int -> Object -> Float
 calculatedWidth loop object =
     case object.shape of
         Square squareData ->
-            squareData.width + transformationByLoop loop object.scale
+            (squareData.width + transformationByLoop loop object.scale)
+                |> max 0
 
         Circle circleData ->
-            2 * circleData.radius + transformationByLoop loop object.scale
+            (2 * circleData.radius + transformationByLoop loop object.scale)
+                |> max 0
 
 
 calculatedHeight : Int -> Object -> Float
 calculatedHeight loop object =
     case object.shape of
         Square squareData ->
-            squareData.height + transformationByLoop loop object.scale
+            (squareData.height + transformationByLoop loop object.scale)
+                |> max 0
 
         Circle circleData ->
-            2 * circleData.radius + transformationByLoop loop object.scale
+            (2 * circleData.radius + transformationByLoop loop object.scale)
+                |> max 0
 
 
 calculatedRotation : Int -> Object -> String
