@@ -294,8 +294,7 @@ update msg model =
                         -- Then write history!and clear it!
                         ( { model
                             | wheelState =
-                                Debug.log "Write History"
-                                    Dict.remove
+                                Dict.remove
                                     id
                                     model.wheelState
                             , history =
